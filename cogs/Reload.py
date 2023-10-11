@@ -1,4 +1,6 @@
+import asyncio
 import importlib
+import inspect
 import os
 
 from discord.ext import commands
@@ -15,7 +17,16 @@ class Reload(BaseCog):
     async def cog_check(self, ctx):
         return await self.bot.permission_manage_bot(ctx)
 
-    async def on_ready(self):
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
+
         restart_mid = Configuration.get_persistent_var("bot_restart_message_id")
         restart_cid = Configuration.get_persistent_var("bot_restart_channel_id")
         author_id = Configuration.get_persistent_var("bot_restart_author_id")
@@ -30,7 +41,7 @@ class Reload(BaseCog):
                 author = self.bot.get_user(author_id)
                 await message.edit(content=f"Restart complete {author.mention}")
             except Exception as e:
-                await Utils.handle_exception("Reload on_ready exception", self.bot, e)
+                await Utils.handle_exception("Reload after_ready exception", self.bot, e)
                 pass
 
     @commands.command()
@@ -41,13 +52,8 @@ class Reload(BaseCog):
         Be sure that cog has no unsaved data, in-progress uses, etc. or is just so borked that it needs to be kicked
         cog: The name of the cog to reload
         """
-        cogs = []
-        for c in ctx.bot.cogs:
-            cogs.append(c.replace('Cog', ''))
-
-        if cog in cogs:
-            await self.bot.unload_extension(f"cogs.{cog}")
-            await self.bot.load_extension(f"cogs.{cog}")
+        if cog in self.bot.cogs:
+            await self.bot.reload_extension(f"cogs.{cog}")
             await ctx.send(f'**{cog}** has been reloaded.')
             await Logging.bot_log(f'**{cog}** has been reloaded by {ctx.author.name}.')
         else:
@@ -81,6 +87,7 @@ class Reload(BaseCog):
             if cog not in Configuration.MASTER_CONFIG["cogs"]:
                 Configuration.MASTER_CONFIG["cogs"].append(cog)
                 Configuration.save()
+
             await ctx.send(f"**{cog}** has been loaded!")
             await Logging.bot_log(f"**{cog}** has been loaded by {ctx.author.name}.")
             Logging.info(f"{cog} has been loaded")
@@ -124,6 +131,7 @@ class Reload(BaseCog):
             Logging.info(f'{cog} has been unloaded.')
             await self.bot.load_extension(f"cogs.{cog}")
             Logging.info(f'{cog} has been loaded.')
+
         await message.edit(content="Hot reload complete")
 
     @commands.command()

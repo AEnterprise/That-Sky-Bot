@@ -1,8 +1,10 @@
+import asyncio
+
 import discord
 from discord.ext import commands
 
 from cogs.BaseCog import BaseCog
-from utils import Configuration, Emoji, Lang, Utils, Questions
+from utils import Configuration, Emoji, Lang, Utils, Questions, Logging
 from utils.Database import CustomCommand
 
 
@@ -15,7 +17,15 @@ class CustCommands(BaseCog):
     async def cog_check(self, ctx):
         return ((ctx.guild and ctx.author.guild_permissions.ban_members) or await self.bot.permission_manage_bot(ctx))
 
-    async def on_ready(self):
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
             await self.init_guild(guild)
 

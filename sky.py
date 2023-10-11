@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 import signal
 import sys
@@ -14,10 +13,9 @@ from prometheus_client import CollectorRegistry
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from tortoise import Tortoise
 from aerich import Command
-from hanging_threads import start_monitoring
 
 import utils.tortoise_settings
-from utils import Logging, Configuration, Utils, Emoji, Database, Lang
+from utils import Logging, Configuration, Utils, Emoji, Database, Lang, dbbackup
 from utils.Logging import TCol
 from utils.Database import BotAdmin, Guild
 from utils.PrometheusMon import PrometheusMon
@@ -50,7 +48,7 @@ class Skybot(Bot):
         Logging.info('db init is done')
 
         await Lang.load_local_overrides()
-        Logging.info(f"Locales loaded\nguild: {Lang.GUILD_LOCALES}\nchannel: {Lang.CHANNEL_LOCALES}")
+        Logging.info(f"Locales loaded\n\tguild: {Lang.GUILD_LOCALES}\n\tchannel: {Lang.CHANNEL_LOCALES}")
 
         for cog in Configuration.get_var("cogs"):
             try:
@@ -72,14 +70,7 @@ class Skybot(Bot):
         Logging.BOT_LOG_CHANNEL = self.get_channel(Configuration.get_var("log_channel"))
         Emoji.initialize(self)
 
-        on_ready_tasks = []
-        for cog in list(self.cogs):
-            c = self.get_cog(cog)
-            if hasattr(c, "on_ready"):
-                on_ready_tasks.append(c.on_ready())
-        await asyncio.gather(*on_ready_tasks)
-
-        Logging.info(f"{TCol.cUnderline}{TCol.cWarning}{self.my_name} startup complete{TCol.cEnd}{TCol.cEnd}")
+        Logging.info(f"{TCol.cUnderline}{TCol.cWarning}{self.my_name} on_ready complete{TCol.cEnd}{TCol.cEnd}")
         await Logging.bot_log(f"{Configuration.get_var('bot_name', 'this bot')} startup complete")
 
     async def get_guild_log_channel(self, guild_id):
@@ -150,6 +141,7 @@ class Skybot(Bot):
         channel = await self.get_guild_log_channel(guild_id)
         if channel and (message or embed):
             return await channel.send(content=message, embed=embed, allowed_mentions=AllowedMentions.none())
+        return None
 
     async def close(self):
         Logging.info("Shutting down?")
@@ -261,26 +253,31 @@ async def can_admin(ctx):
 
 
 async def persistent_data_job(work_item: Configuration.PersistentAction):
-    """
-    Perform persistent data i/o job
-    :param work_item: Configuration.PersistentAction
-    :return:
+    """Perform persistent data i/o job
+
+    Parameters
+    ----------
+    work_item: Configuration.PersistentAction
     """
     Configuration.do_persistent_action(work_item)
 
 
 async def queue_worker(name, queue, job, shielded=False):
-    """
-    Generic queue worker
-    :param name:
-    :param queue: the queue to pull work items from
-    :param job: the job that will be done on work items
-    :param shielded: boolean indicating whether the job will be shielded from cancellation
-    :return:
+    """Generic queue worker
+
+    Parameters
+    ----------
+    name
+    queue:
+        the queue to pull work items from
+    job:
+        the job that will be done on work items
+    shielded:
+        boolean indicating whether the job will be shielded from cancellation
     """
     global running
     try:
-        Logging.info(f"\t{TCol.cOkGreen}start{TCol.cEnd} {TCol.cOkCyan}`{name}`{TCol.cEnd} worker")
+        # Logging.info(f"\t{TCol.cOkGreen}start{TCol.cEnd} {TCol.cOkCyan}`{name}`{TCol.cEnd} worker")
         while True:
             # Get a work_item from the queue
             work_item = await queue.get()
@@ -299,12 +296,12 @@ async def queue_worker(name, queue, job, shielded=False):
                 await Utils.handle_exception("worker unexpected exception", Utils.BOT, e)
             queue.task_done()
     finally:
-        Logging.info(f"{name} worker is finished")
+        # Logging.info(f"{name} worker is finished")
         return
 
 
 async def main():
-    start_monitoring(seconds_frozen=10, test_interval=100)
+    # start_monitoring(seconds_frozen=10, test_interval=100)
 
     global running
     running = True
@@ -318,6 +315,9 @@ async def main():
 
     if dsn != '':
         sentry_sdk.init(dsn, before_send=before_send, environment=dsn_env, integrations=[AioHttpIntegration()])
+
+    # perform db backup before any connections are made to db
+    utils.dbbackup.backup_database()
 
     loop = asyncio.get_running_loop()
     await run_db_migrations()

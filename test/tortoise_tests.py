@@ -18,6 +18,8 @@ async def run():
         "ArtChannel",
         "Attachments",
         "AutoResponder",
+        "AutoResponderChannel",
+        "AutoResponse",
         "BotAdmin",
         "BugReport",
         "BugReportingChannel",
@@ -47,6 +49,8 @@ async def run():
         # "drop table aerich;",
         "drop table artchannel;",
         "drop table attachments;",
+        "drop table autoresponse;",
+        "drop table autoresponderchannel;",
         "drop table autoresponder;",
         "drop table botadmin;",
         "drop table bugreportingchannel;",
@@ -80,7 +84,11 @@ async def run():
     # Generate the schema
     # DO NOT USE THIS EXCEPT TO INIT A NEW INSTALL
     print("generating schema...")
-    await Tortoise.generate_schemas()
+    try:
+        await Tortoise.generate_schemas()
+    except Exception as e:
+        print(e)
+        return
     print('[PASS]')
 
     print("integrity checks...")
@@ -369,17 +377,54 @@ async def run():
     tables.remove("CustomCommand")
 
     try:
-        await AutoResponder.create(serverid=234567, trigger="arfake", response="9876")
-        await AutoResponder.create(serverid=234567, trigger="arfake2", response="9876")
-        await AutoResponder.create(serverid=234568, trigger="arfake", response="9876")
-        await AutoResponder.create(serverid=234568, trigger="arfake2", response="9876")
+        my_ar = await AutoResponder.create(serverid=234567, trigger="arfake", response="9876")
+        my_ar2 = await AutoResponder.create(serverid=234567, trigger="arfake2", response="9876")
+        my_ar3 = await AutoResponder.create(serverid=234568, trigger="arfake3", response="9876")
+        await AutoResponder.create(serverid=234568, trigger="arfake4", response="9876")
     except tortoise.exceptions.IntegrityError as e:
         print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
+        return
     try:
         await AutoResponder.create(serverid=234567, trigger="arfake", response="9876")
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
     tables.remove("AutoResponder")
+
+    try:
+        await AutoResponderChannel.create(guild=my_guild, autoresponder=my_ar, channelid=12345, type=AutoResponderChannelType.log)
+        await AutoResponderChannel.create(guild=my_guild, autoresponder=my_ar, channelid=23456, type=AutoResponderChannelType.log)
+        await AutoResponderChannel.create(guild=my_guild, autoresponder=my_ar2, channelid=12345, type=AutoResponderChannelType.listen)
+        await AutoResponderChannel.create(guild=my_guild, autoresponder=my_ar2, channelid=23456, type=AutoResponderChannelType.listen)
+        await AutoResponderChannel.create(guild=my_guild, autoresponder=my_ar2, channelid=45678, type=AutoResponderChannelType.response)
+        await AutoResponderChannel.create(guild=my_guild, autoresponder=my_ar3, channelid=76543, type=AutoResponderChannelType.response)
+        # global ignore channel:
+        await AutoResponderChannel.create(guild=my_guild, channelid=99099, type=AutoResponderChannelType.ignore)
+        await AutoResponderChannel.create(guild=my_guild, channelid=99100, type=AutoResponderChannelType.ignore)
+    except tortoise.exceptions.IntegrityError as e:
+        print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
+    try:
+        await AutoResponderChannel.get_or_create(autoresponder=my_ar, channelid=12345, type=AutoResponderChannelType.log)
+    except tortoise.exceptions.IntegrityError as e:
+        print(f"[PASS] {type(e)} {e}")
+    tables.remove("AutoResponderChannel")
+
+    try:
+        await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.log)
+        await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.mod)
+        await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.reply)
+        await AutoResponse.create(autoresponder=my_ar2, response="a message", type=AutoResponseType.reply)
+        await AutoResponse.create(autoresponder=my_ar2, response="another message", type=AutoResponseType.reply)
+        await AutoResponse.create(autoresponder=my_ar2, response="more message", type=AutoResponseType.reply)
+        await AutoResponse.create(autoresponder=my_ar2, response="yes message", type=AutoResponseType.reply)
+        await AutoResponse.create(autoresponder=my_ar2, response="no message", type=AutoResponseType.reply)
+        await AutoResponse.create(autoresponder=my_ar3, response="a message", type=AutoResponseType.log)
+    except tortoise.exceptions.IntegrityError as e:
+        print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
+    try:
+        await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.log)
+    except tortoise.exceptions.IntegrityError as e:
+        print(f"[PASS] {type(e)} {e}")
+    tables.remove("AutoResponse")
 
     try:
         await CountWord.create(serverid=234567, word="fake")
@@ -669,8 +714,80 @@ async def run():
         for att in await i.attachments:
             print(f"\t\t{att.url}")
 
+    print("\n##############\nget some relations:")
+    try:
+        for row in await AutoResponder.all():
+            print(row)
+            log_channels = await row.channels.filter(type=AutoResponderChannelType.log)
+            response_channels = await row.channels.filter(type=AutoResponderChannelType.response)
+            listen_channels = await row.channels.filter(type=AutoResponderChannelType.listen)
+            print(f"\tlog channels:")
+            for rel in log_channels:
+                print(f"\t\t{rel.channelid}, {rel.type}")
+            print(f"\tlisten channels:")
+            for rel in listen_channels:
+                print(f"\t\t{rel.channelid}, {rel.type}")
+            print(f"\tresponse channels:")
+            for rel in response_channels:
+                print(f"\t\t{rel.channelid}, {rel.type}")
+            log_responses = await row.responses.filter(type=AutoResponseType.log)
+            mod_responses = await row.responses.filter(type=AutoResponseType.log)
+            reply_responses = await row.responses.filter(type=AutoResponseType.reply)
+            print(f"\tlog responses:")
+            for rel in log_responses:
+                print(f"\t\t{rel.response}, {rel.type}")
+            print(f"\tmod responses:")
+            for rel in mod_responses:
+                print(f"\t\t{rel.response}, {rel.type}")
+            print(f"\treply responses:")
+            for rel in reply_responses:
+                print(f"\t\t{rel.response}, {rel.type}")
+    except Exception as e:
+        print("relations failed\n")
+        print(e)
+
+    print("\n##############\nsame relations, but prefetched:")
+    try:
+        for row in await AutoResponder.all().prefetch_related('channels', 'responses'):
+            print('=========')
+            print(row)
+            for i in row.channels:
+                print(f"channel id: {i.channelid} type: {i.type}")
+            for i in row.responses:
+                print(f"response: {i.response} type: {i.type}")
+        for row in await AutoResponder.filter(serverid=234567).order_by('id').prefetch_related(
+            Prefetch('channels', queryset=AutoResponderChannel.filter(type=AutoResponderChannelType.log), to_attr='log_channels'),
+            Prefetch('channels', queryset=AutoResponderChannel.filter(type=AutoResponderChannelType.response), to_attr='response_channels'),
+            Prefetch('channels', queryset=AutoResponderChannel.filter(type=AutoResponderChannelType.listen), to_attr='listen_channels'),
+            Prefetch('channels', queryset=AutoResponderChannel.filter(type=AutoResponderChannelType.ignore), to_attr='ignored_channels'),
+            Prefetch('responses', queryset=AutoResponse.filter(type=AutoResponseType.log).limit(1), to_attr='log_responses'),
+            Prefetch('responses', queryset=AutoResponse.filter(type=AutoResponseType.reply), to_attr='reply_responses'),
+            Prefetch('responses', queryset=AutoResponse.filter(type=AutoResponseType.mod).limit(1), to_attr='mod_responses')
+        ):
+            print('--------')
+            print(row)
+            print(f"log channels: {[c.channelid for c in row.log_channels]}")
+            print(f"response channels: {[c.channelid for c in row.response_channels]}")
+            print(f"listen channels: {[c.channelid for c in row.listen_channels]}")
+            print(f"log responses: {[r.response for r in row.log_responses]}")
+            print(f"reply_responses: {[r.response for r in row.reply_responses]}")
+            print(f"mod responses: {[r.response for r in row.mod_responses]}")
+    except Exception as e:
+        print("relations failed:")
+        print(e)
+        raise e
+
+    print('\n********************\nAR global ignore channel')
+    ar_ignored = await AutoResponderChannel.filter(guild=my_guild, autoresponder=None)
+    print(ar_ignored)
+
     # delete without fetching
     print("\nDelete some things:")
+    print(AutoResponder.get(id=2).delete().sql())
+    try:
+        await my_ar2.delete()
+    except Exception as e:
+        print(e)
     print(BugReport.get(id=1).delete().sql())
     one_bug = await BugReport.get(id=1).delete()
     print(f"\nThis bug was deleted: {one_bug}")

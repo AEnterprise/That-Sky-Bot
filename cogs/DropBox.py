@@ -28,9 +28,15 @@ class DropBox(BaseCog):
         self.delete_in_progress = dict()
         self.clean_in_progress = False
 
-    async def on_ready(self):
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
         await self.bot.wait_until_ready()
-        Logging.info(f"\t{TCol.cOkBlue}starting DropBox{TCol.cEnd}")
+        Logging.info(f"\t{self.qualified_name}::after_ready")
 
         for guild in self.bot.guilds:
             # fetch dropbox channels per server

@@ -8,16 +8,17 @@ import typing
 from collections import OrderedDict, namedtuple
 from datetime import datetime
 from json import JSONDecodeError
+from discord.ext.commands import Bot
 
 import discord
 import sentry_sdk
 from aiohttp import ClientOSError, ServerDisconnectedError
-from discord import Embed, Colour, ConnectionClosed, NotFound, guild
+from discord import Embed, Colour, ConnectionClosed, NotFound
 from discord.abc import PrivateChannel
 
 from utils import Logging, Configuration
 
-BOT: typing.Any = None
+BOT: typing.Optional[Bot] = None
 GUILD_CONFIGS = dict()
 ID_MATCHER = re.compile("<@!?([0-9]+)[\\\\]*>")
 ROLE_ID_MATCHER = re.compile("<@&([0-9]+)>")
@@ -399,48 +400,50 @@ def to_pretty_time(seconds):
 
 
 def chunk_list_or_string(input_list, chunk_size):
-    '''
-    cut input into chunks, maximum size is `chunk_size` and return a generator that goes through every chunk. 
+    """
+    cut input into chunks, maximum size is `chunk_size` and return a generator that goes through every chunk.
     chunks are contiguous and only last one may have length less than `chunk_size`
-    '''
+    """
     for i in range(0, len(input_list), chunk_size):
         yield input_list[i:i + chunk_size]
 
 
-def paginate(input, max_lines=20, max_chars=1900, prefix="", suffix=""):
-    '''
+def paginate(input_data, max_lines=20, max_chars=1900, prefix="", suffix=""):
+    """
     splits the given text input into a list of pages to fit in Discord messages.
-    
+
     Each page has provided prefix and suffix in it and is at most `max_chars` length, disregarding any leading and trailing whitespace.
     len(page) in code may be longer because of trailing whitespace, which Discord removes
-    
+
     Parameters
     -----
-    input : str
+    input_data : str
             string of arbitrary length
-
+    max_lines : int
     max_chars : int
-        max number of characters per page. one page is meant to fit in one message, so should be a positive integer 
-        less than the Discord message length a bot can send (2k characters right now). 
+        max number of characters per page. one page is meant to fit in one message, so should be a positive integer
+        less than the Discord message length a bot can send (2k characters right now).
         recommend to set lower than max to leave some buffer for other additions
+    prefix: str
+    suffix: str
 
     Returns
     -------
     a list of 0 or more non-empty strings
-    '''
+    """
     max_chars -= len(prefix) + len(suffix)
     #max_chars is now max number of characters we can read from input that would fit in one page
-    lines = str(input).splitlines(keepends=True)
+    lines = str(input_data).splitlines(keepends=True)
     pages = []
     page = ""
     count = 0
 
     def add_page(content):
-        '''
+        """
         adds on prefix and suffix to the given content and adds it as a page to the list.
         length of `content` must be less that `max_chars`.
         moves onto the next page by setting page to empty string
-        '''
+        """
         nonlocal pages, page
         pages.append(f"{prefix}{content}{suffix}")
         page = ""
@@ -477,6 +480,17 @@ def paginate(input, max_lines=20, max_chars=1900, prefix="", suffix=""):
     return pages
 
 
+def pages_to_embed(content: str, embed: discord.Embed, field_name: str = "Contents"):
+    contents = paginate(content, max_chars=900)
+    i = 0
+    for chunk in contents:
+        i = i + 1
+        embed.add_field(
+            name=f"{field_name}{', part ' + str(i) if len(contents) > 1 else ''}",
+            value=f"```{chunk}```",
+            inline=False)
+
+
 def closest_power2_log(num):
     lower = int(math.floor(math.log2(num)))
     upper = int(math.ceil(math.log2(num)))
@@ -499,5 +513,24 @@ def closest_power2_str(num):
     return upper_pow
 
 
-def is_power_of_two(num):
+def is_power_of_two(num: int):
+    if num < 0:
+        return False
     return num and (not(num & (num - 1)))
+
+
+def get_bitshift(value: int) -> typing.Union[bool, int]:
+    """Get the bit position for a power of two value. If a non-power-2 number is input, return value is False
+
+    Parameters
+    ----------
+    value: int
+        Input number
+
+    Returns
+    -------
+    int|False Bit-shift of the input value
+    """
+    if is_power_of_two(value):
+        return [int(c) for i, c in enumerate(bin(value)[:1:-1])].index(1)
+    raise ValueError

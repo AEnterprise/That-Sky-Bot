@@ -15,7 +15,7 @@ class Option:
     emoji: str = None
     text: str = None
     handler: typing.Callable = None
-    args: str = None
+    args: typing.Union[str, list] = None
 
 
 def timeout_format(total_seconds: int) -> str:

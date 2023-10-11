@@ -102,7 +102,6 @@ bugs:
   no_live_windows:
   dm_unable:
 eden:
-  dm_prompt:
   reset:
   tz_help:
   tz_mention:

@@ -7,6 +7,7 @@ EMOJI = dict()
 BACKUPS = {
     "ANDROID": "🤖",
     "BETA": "🌙",
+    "DEMO": "⚙️",
     "BUG": "🐛",
     "IOS": "🍎",
     "NO": "🚫",

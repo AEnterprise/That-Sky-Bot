@@ -1,10 +1,11 @@
+import asyncio
 import re
 
 import discord
 from discord import NotFound, HTTPException
 from discord.ext import commands
 
-from utils import Lang, Utils, Emoji
+from utils import Lang, Utils, Emoji, Logging
 from utils.Database import ArtChannel
 
 from cogs.BaseCog import BaseCog
@@ -24,7 +25,15 @@ class ArtCollector(BaseCog):
     async def cog_check(self, ctx):
         return ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx)
 
-    async def on_ready(self):
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         # Load channels
         for guild in self.bot.guilds:
             await self.init_guild(guild)
@@ -227,7 +236,7 @@ class ArtCollector(BaseCog):
                 embed.add_field(name="URL", value=f"[Download]({attachment.url})")
                 if my_message.content and not content_shown:
                     # Add message content to the first of multiples, when many attachments to a single my_message.
-                    embed.add_field(name="Message Content", value=my_message.content, inline=False)
+                    Utils.pages_to_embed(my_message.content, embed, "Message Content")
                     content_shown = True
                 embed.set_image(url=attachment.url)
                 sent = await my_channel.send(embed=embed)

@@ -87,11 +87,16 @@ class Mischief(BaseCog):
         self.role_counts = dict()
 
     async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
         self.name_cooldown_time = float(Configuration.get_persistent_var("name_mischief_cooldown", 10.0))
         self.name_mischief_chance = float(Configuration.get_persistent_var("name_mischief_chance", 0.01))
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
 
-    async def on_ready(self):
-        Logging.info(f"Mischief on_ready")
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
             await self.init_guild(guild)
 

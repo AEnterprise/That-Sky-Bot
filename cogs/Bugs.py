@@ -43,10 +43,13 @@ class Bugs(BaseCog):
         self.maintenance_message = None
         self.maint_check_count = 0
         self.bug_tasks = []
+        self.task_limit = 200
+
+        Logging.info(f"\t{TCol.cWarning}starting {self.task_limit} bug tasks{TCol.cEnd}")
         self.bug_runner_tasks = [
             asyncio.create_task(
                 queue_worker(f"Bug Queue {i}", self.bug_report_queue, self.run_bug_report))
-            for i in range(200)
+            for i in range(self.task_limit)
         ]
 
     async def cog_unload(self):
@@ -56,36 +59,44 @@ class Bugs(BaseCog):
             # TODO: cancel report
             # TODO: save bug progress
             # TODO: resume report when restarting? inform user report was interrupted by restart, re-ask last question
-        Logging.info(f"\t{TCol.cWarning}Cancel active bug runners{TCol.cEnd}")
+        Logging.info(f"\t{TCol.cWarning}Cancel active bug runners...{TCol.cEnd}")
         for task in [*self.bug_runner_tasks, *self.bug_tasks]:
             task.cancel()
         try:
-            Logging.info(f"\t{TCol.cWarning}Wait for bug tasks to end{TCol.cEnd}")
+            Logging.info(f"\t{TCol.cWarning}Wait for bug tasks to end...{TCol.cEnd}")
             await asyncio.gather(*self.bug_tasks)
-            Logging.info(f"\t{TCol.cWarning}Wait for bug runners to end{TCol.cEnd}")
+            Logging.info(f"\t{TCol.cWarning}Wait for bug runners to end...{TCol.cEnd}")
             await asyncio.gather(*self.bug_runner_tasks)
         except CancelledError:
             pass
         except Exception as e:
             Logging.info(e)
-        Logging.info(f"\t{TCol.cWarning}Verify empty bug queue{TCol.cEnd}")
+        Logging.info(f"\t{TCol.cWarning}Verify empty bug queue...{TCol.cEnd}")
         self.verify_empty_bug_queue.cancel()
-        Logging.info(f"\t{TCol.cWarning}Cancel bug cleanup tasks{TCol.cEnd}")
+        Logging.info(f"\t{TCol.cWarning}Cancel bug cleanup tasks...{TCol.cEnd}")
         for task in self.sweeps:
             task.cancel()
         await asyncio.gather(*self.sweeps)
         Logging.info(f"\t{TCol.cOkGreen}Bugs unloaded{TCol.cEnd}")
 
     async def cog_load(self):
-        Logging.info("starting bugs")
+        Logging.info(f"\t{self.qualified_name}::cog_load")
         m = self.bot.metrics
         m.reports_in_progress.set_function(lambda: len(self.in_progress))
         # this count is only good for reports waiting to start
         # TODO: how to count number of workers that are working?
         # m.reports_in_progress.set_function(self.bug_report_queue.qsize)
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
 
-    async def on_ready(self):
-        Logging.info("readying bugs")
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
+        await self.clean_and_send_trigger_messages()
+
+    async def clean_and_send_trigger_messages(self):
+        Logging.info("\tcleaning bug messages")
         reporting_channel_ids = []
         for row in await BugReportingChannel.all().prefetch_related('guild', 'platform'):
             cid = row.channelid
@@ -106,7 +117,7 @@ class Bugs(BaseCog):
         try:
             await self.send_bug_info(*reporting_channel_ids)
         except Exception as e:
-            await Utils.handle_exception("bug startup failure", self.bot, e)
+            await Utils.handle_exception("bug clean messages failure", self.bot, e)
 
     async def can_mod(ctx):
         guild = Utils.get_home_guild()
@@ -331,7 +342,7 @@ class Bugs(BaseCog):
     @commands.check(can_mod)
     async def cleanup(self, ctx):
         await ctx.send("Attempting to re-send bug channel prompt messages...")
-        await self.on_ready()
+        await self.after_ready()
         await ctx.send("Done! ||I think?||")
 
     @bug.group(name='platforms', aliases=['platform'], invoke_without_command=True)

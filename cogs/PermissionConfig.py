@@ -1,27 +1,43 @@
+import asyncio
+import json
+
 import discord
 from discord.ext import commands
 
 from cogs.BaseCog import BaseCog
-from utils import Lang
+from utils import Lang, Logging
 from utils.Database import Guild, BotAdmin
 from utils import Utils
+from utils.Logging import TCol
 
 
 class PermissionConfig(BaseCog):
-    admin_roles = dict()
-    mod_roles = dict()
-    trusted_roles = dict()
-    command_permissions = dict()
-
     def __init__(self, bot):
+        self.admin_roles = dict()
+        self.mod_roles = dict()
+        self.trusted_roles = dict()
+        self.command_permissions = dict()
+        self.after_ready_task = None
         super().__init__(bot)
 
-    async def on_ready(self):
+    async def cog_unload(self):
+        await self.after_ready_task
+
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        self.after_ready_task = asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
-            await self.init_guild(guild)
+            self.init_guild(guild)
+        for guild in self.bot.guilds:
             await self.load_guild(guild)
 
-    async def init_guild(self, guild):
+    def init_guild(self, guild):
         self.admin_roles[guild.id] = set()
         self.mod_roles[guild.id] = set()
         self.trusted_roles[guild.id] = set()
@@ -29,34 +45,37 @@ class PermissionConfig(BaseCog):
 
     async def load_guild(self, guild):
         guild_row, created = await Guild.get_or_create(serverid=guild.id)
-        for row in await guild_row.admin_roles:
-            role = guild.get_role(row.roleid)
-            if role:
-                self.admin_roles[guild.id].add(role.id)
-            else:
-                await row.delete()
-        for row in await guild_row.mod_roles:
-            role = guild.get_role(row.roleid)
-            if role:
-                self.mod_roles[guild.id].add(role.id)
-            else:
-                await row.delete()
-        for row in await guild_row.trusted_roles:
-            role = guild.get_role(row.roleid)
-            if role:
-                self.trusted_roles[guild.id].add(role.id)
-            else:
-                await row.delete()
-        for row in await guild_row.command_permissions:
-            member = guild.get_member(row.userid)
-            if member:
-                self.command_permissions[guild.id][member.id] = row
-            else:
-                await row.delete()
+        try:
+            for row in await guild_row.admin_roles:
+                role = guild.get_role(row.roleid)
+                if role:
+                    self.admin_roles[guild.id].add(role.id)
+                else:
+                    await row.delete()
+            for row in await guild_row.mod_roles:
+                role = guild.get_role(row.roleid)
+                if role:
+                    self.mod_roles[guild.id].add(role.id)
+                else:
+                    await row.delete()
+            for row in await guild_row.trusted_roles:
+                role = guild.get_role(row.roleid)
+                if role:
+                    self.trusted_roles[guild.id].add(role.id)
+                else:
+                    await row.delete()
+            for row in await guild_row.command_permissions:
+                member = guild.get_member(row.userid)
+                if member:
+                    self.command_permissions[guild.id][member.id] = row
+                else:
+                    await row.delete()
+        except KeyError:
+            Logging.info(f"{TCol.cFail}Role loading failed in {guild.id}{TCol.cEnd}")
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
-        await self.init_guild(guild)
+        self.init_guild(guild)
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
@@ -143,7 +162,7 @@ class PermissionConfig(BaseCog):
     @commands.is_owner()
     @commands.guild_only()
     async def reload(self, ctx: commands.Context):
-        await self.on_ready()
+        await self.cog_load()
         await ctx.send("reloaded permissions from db...")
         await ctx.invoke(self.permission_config)
 

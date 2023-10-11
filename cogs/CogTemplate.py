@@ -1,7 +1,10 @@
+import asyncio
+
 import discord
 from discord.ext import commands, tasks
 
 from cogs.BaseCog import BaseCog
+from utils import Logging
 
 
 class CogName(BaseCog):
@@ -11,10 +14,15 @@ class CogName(BaseCog):
         self.guild_specific_lists = dict()
 
     async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
         # initialize anything that should happen before login
-        pass
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
 
-    async def on_ready(self):
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
             await self.init_guild(guild)
         if not self.periodic_task.is_running():

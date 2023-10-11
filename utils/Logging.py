@@ -1,10 +1,13 @@
+import typing
 from dataclasses import dataclass
 import logging
 import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
 
-BOT_LOG_CHANNEL = None
+from discord import TextChannel
+
+BOT_LOG_CHANNEL: typing.Union[TextChannel, None] = None
 
 LOGGER = logging.getLogger('thatskybot')
 DISCORD_LOGGER = logging.getLogger('discord')

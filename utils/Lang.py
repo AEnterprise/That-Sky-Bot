@@ -1,5 +1,9 @@
+import typing
+
 import yaml
 import operator
+
+from discord import Interaction
 from discord.ext.commands import Context
 from functools import reduce  # forward compatibility for Python 3
 from utils import Logging, Configuration, Utils
@@ -65,11 +69,16 @@ def get_string(key, **kwargs):
             obj = obj[i]
 
 
-def get_defaulted_locale(ctx):
+def get_defaulted_locale(ctx: typing.Union[Context, Interaction, str]):
     locale = 'en_US'
-    if isinstance(ctx, Context):
-        # TODO: move guild/channel checks to LangConfig, store in dict, update there on guild events and config changes
-        cid = ctx.channel.id
+    if isinstance(ctx, Interaction) or isinstance(ctx, Context):
+        if isinstance(ctx, Interaction):
+            interaction = typing.cast(Interaction, ctx)
+            cid = interaction.channel.id
+        else:
+            # TODO: move guild/channel checks to LangConfig, store in dict,
+            #  update there on guild events and config changes
+            cid = ctx.channel.id
 
         if ctx.guild is None:
             # DM - default the language

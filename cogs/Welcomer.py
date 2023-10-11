@@ -1,3 +1,4 @@
+import asyncio
 import re
 import typing
 from datetime import datetime
@@ -21,7 +22,15 @@ class Welcomer(BaseCog):
     def cog_unload(self):
         pass
 
-    async def on_ready(self):
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
             await self.init_guild(guild)
 

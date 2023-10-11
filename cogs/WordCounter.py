@@ -1,10 +1,11 @@
+import asyncio
 import re
 
 import discord
 from discord.ext import commands
 
 from cogs.BaseCog import BaseCog
-from utils import Lang, Utils, Emoji, Configuration
+from utils import Lang, Utils, Emoji, Configuration, Logging
 from utils.Database import CountWord
 
 
@@ -14,7 +15,15 @@ class WordCounter(BaseCog):
         super().__init__(bot)
         self.words = dict()
 
-    async def on_ready(self):
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         self.words = dict()
         for guild in self.bot.guilds:
             await self.init_guild(guild)
@@ -75,8 +84,8 @@ class WordCounter(BaseCog):
         """command_add_help"""
         row = await CountWord.get_or_none(serverid=ctx.guild.id, word=word)
         if row is None:
-            await CountWord.create(serverid = ctx.guild.id, word=word)
-            await self.on_ready()
+            await CountWord.create(serverid=ctx.guild.id, word=word)
+            await self.init_guild(ctx.guild)
             emoji = Emoji.get_chat_emoji('YES')
             msg = Lang.get_locale_string('word_counter/word_added', ctx, word=word)
             await ctx.send(f"{emoji} {msg}")
@@ -90,7 +99,7 @@ class WordCounter(BaseCog):
         row = await CountWord.get_or_none(serverid=ctx.guild.id, word=word)
         if row is not None:
             await row.delete()
-            await self.on_ready()
+            await self.init_guild(ctx.guild)
             emoji = Emoji.get_chat_emoji('YES')
             msg = Lang.get_locale_string('word_counter/word_removed', ctx, word=word)
         else:

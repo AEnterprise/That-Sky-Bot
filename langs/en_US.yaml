@@ -213,7 +213,6 @@ bugs:
   no_live_windows: There is no live version available on Windows yet, only beta. Go back to the bug report channel any time to start a new report!
   dm_unable: '{user}, I was unable to DM you for questions about your bug, Please allow DMs from this server to file bug reports. You can enable this in the privacy settings, found in the server dropdown menu. Once your report is filed, you may disable DMs again if you like.'
 eden:
-  dm_prompt: Did you know you can use the `!edenreset` or `!er` command in my DMs? Shorter cooldown there too.
   reset: |
     The Eye of Eden resets once per week.
     Next reset happens {reset} (In {countdown})

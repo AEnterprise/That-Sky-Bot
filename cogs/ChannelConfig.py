@@ -1,3 +1,5 @@
+import asyncio
+
 import discord
 from discord.ext import commands
 
@@ -14,16 +16,21 @@ class ChannelConfig(BaseCog):
         super().__init__(bot)
 
     async def cog_load(self):
-        # Load channels
+        Logging.info(f"\t{self.qualified_name}::cog_load")
         self.bot.config_channels = dict()
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
 
-    async def on_ready(self):
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
+            # Load channels
             await self.load_guild(guild)
 
     async def startup_cleanup(self):
         await self.cog_load()
-        await self.on_ready()
 
     async def init_guild(self, guild):
         self.bot.config_channels[guild.id] = dict()
