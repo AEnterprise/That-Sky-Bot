@@ -1,467 +1,297 @@
+test:
 guild_config:
-  info_title: --jp-- Guild base configuration for {server_name}
+  info_title: LOCALIZE_ME
+common:
+  nope: LOCALIZE_ME
+  which_one: LOCALIZE_ME
+  you_chose_codeblock: LOCALIZE_ME
+  you_chose_bold: LOCALIZE_ME
+  expect_integer: LOCALIZE_ME
 questions:
-  text_only: --jp-- I can't accept files yet. That step comes later. Just use your words
-  confirm_prompt: --jp-- Are you sure {backticks}{message}{backticks} is correct?
-  another_attachment: --jp-- Do you want to add another attachment?
-  confirm_attachments: --jp-- Are those all the files you meant to send?
-  restart_attachment_singular: --jp-- Forget that attachment and try again
-  restart_attachment_plural: --jp-- Forget those attachments and try again
-  restart_attachments_yes: --jp-- Yes, try adding attachments again
-  restart_attachments_no: --jp-- Do not attach any files
-  attachment_prompt: --jp-- Send up to {max} files or links
-  attachment_prompt_continued: --jp-- Send up to {max} more files or links
-  attachment_prompt_final: --jp-- You can send one more file or link
-  attachments_restart: --jp-- Ok, I've thrown away all the attachments you sent. Do you want to try sending files or links again, or skip this step?
-  attachments_overflow: --jp-- You can only add up to {max} attachments
-  attachment_not_found: --jp-- There were no files or links in that message. Try sending again
-  approve_attachments: --jp-- Final answer!
-  error_reaction_timeout: "--jp-- {error_emoji} You didn't react within {timeout}"
+  text_only: LOCALIZE_ME
+  confirm_prompt: LOCALIZE_ME
+  another_attachment: LOCALIZE_ME
+  confirm_attachments: LOCALIZE_ME
+  restart_attachment_singular: LOCALIZE_ME
+  restart_attachment_plural: LOCALIZE_ME
+  restart_attachments_yes: LOCALIZE_ME
+  restart_attachments_no: LOCALIZE_ME
+  attachment_prompt: LOCALIZE_ME
+  attachment_prompt_continued: LOCALIZE_ME
+  attachment_prompt_final: LOCALIZE_ME
+  attachments_restart: LOCALIZE_ME
+  attachments_overflow: LOCALIZE_ME
+  attachment_not_found: LOCALIZE_ME
+  approve_attachments: LOCALIZE_ME
+  error_reaction_timeout: LOCALIZE_ME
+  error_reply_timeout: LOCALIZE_ME
 channel_config:
-  info: --jp-- Channel Config for {server_name}
-  channel_set: --jp-- Config channel "{channel_name}" set to <#{channel_id}>
+  info: LOCALIZE_ME
+  channel_set: LOCALIZE_ME
 permission_config:
-  info: --jp-- Permission Configuration for {server_name}
-  permission_set: --jp-- Permission for {subject} is now {status}
+  info: LOCALIZE_ME
+  permission_set: LOCALIZE_ME
 bugs:
-  bug_info: "--jp-- **Report a New Bug!**\nBrowse or search this channel to see bug reports. To report a bug, click/tap the {bug_emoji} reaction on this message and the bot will DM you for details. You must have DMs open for this server in order to submit a bug report."
-  shutdown_message: --jp-- This bot is going offline, reporting bugs is not possible at this time. Please check back later to report your bug.
-  sweep_trash: --jp-- Sorry to bother you, but you had an in-progress bug report that was idle for too long. I deleted it. If you think you received this message in error, please report me to the proper authorites (a moderator in the Sky server)
-  user_reset: --jp-- Sorry to bother you, but if you had a Sky bug report active, it has been aborted. If you still have a bug to report, please try again later.
-  stop_spamming: "--jp-- {user} stop spamming the bug reaction!"
-  reset_fail: --jp-- I failed to reset an in-progress bug report for <@{uid}>, so I'll just abandon the report. Maybe send them a DM if you want.
-  reset_success: --jp-- I reset an in-progress bug report for <@{uid}> and informed them by DM
-  start_over: "--jp-- {user} You are already in the middle of reporting a bug. Do you want to cancel that report to start over?"
-  start_over_yes: --jp-- Cancel my in-progress report and start a new one
-  start_over_no: --jp-- Do not cancel my in-progress report
-  skip_step: --jp-- Skip this step
-  abort_report: --jp-- Ok, I won't ask you any more questions for now. Go back to the bug report channel any time to start a new one!
-  latest_not_allowed: --jp-- Tell me a number! ``Latest`` is not valid because the latest version changes with every update. You might not even have the latest version if you didn't update recently, so an actual number is really helpful here!
-  love_letter: --jp-- Whoa there, I just need a version number, not an entire love letter
-  no_numbers: --jp-- There don't appear to be any numbers in there
-  text_too_long: --jp-- That text seems suspiciously long for the question asked... Try typing up a shorter answer (up to {max} characters) and we'll see if I like it
-  report_header: "--jp-- **Bug Report {id} - submitted by {user}**"
-  report_timeout: --jp-- This report has been canceled. Go back to the bug report channel to start a new one!
-  attachments_yes: --jp-- Yes, add pictures/videos
-  attachment_info: "--jp-- **Attachment to report {id}**\n{links}"
-  attachment_info_plural: "--jp-- **Attachments to report {id}**\n{links}"
-  report_confirmation: --jp-- Thank you! Your report was submitted, and can be found in {channel_info}!
-  maint_check_fail: --jp-- Sorry {author} but I give up. Maybe the bug queue is busted, as usual.
-  bugs_all_done: --jp-- Bug reports are all done, {author}!!
-  none_in_progress: --jp-- There are no bug reports in progress.
-  report_channel_permissions_fail: --jp-- Failed to set permissions on channel {channel} in server `{server}`. Check channel permissions because I might have broken something...
-  dead_bugs_cleaned: "--jp-- Ok. Number of dead bugs cleaned up: {active_keys}. Number still alive: {in_progress}"
-  maint_on: "--jp-- bot maintenance mode **on**: Reporting channels **closed**."
-  maint_off: "--jp-- bot maintenance mode **off**: Reporting channels **open**."
-  question_ready: |
-    --jp-- ```css
-    Report a Bug
-    ```
-    Help me collect the following information. It will be *very helpful* in identifying, reproducing, and fixing bugs:
-        - Device type
-        - Operating System Version
-        - Sky App Type
-        - Version of the Sky app
-        - Description of the problem, and how to reproduce it
-        - Attachment(s)
-        - Additional Information
-
-    **Don't start typing your report yet!** For questions like this one that have reaction icons, press one of the reactions to answer! Ready to start?
-  platform: --jp-- Platform
-  question_platform: |
-    --jp-- ```css
-    Device Type
-    ```
-    What kind of device do you play Sky on?
-  question_platform_version: |
-    --jp-- ```css
-    Operating System Version
-    ```
-    What {platform} version do you use? This can be found in device settings. You can ***type*** your answer this time
-  device_info: --jp-- Device
-  question_device_info: |
-    --jp-- ```css
-    Device Info
-    ```
-    What model of {platform} device were you using when the bug occurred ({max} characters max)?
-    {device_info_help}
-  device_info_switch: |
-    --jp-- **To find your Nintendo Switch hardware version:**
-    > 1. Look on the back of your Switch
-    > 2. The version looks like `MOD. XXX-000` with 3 letters and 3 numbers. Some Switch devices have additional numbers in parentheses
-    https://media.discordapp.net/attachments/834518314264821810/840396032457965578/switch_version.jpg
+  bug_info: LOCALIZE_ME
+  shutdown_message: LOCALIZE_ME
+  sweep_trash: LOCALIZE_ME
+  user_reset: LOCALIZE_ME
+  stop_spamming: LOCALIZE_ME
+  reset_fail: LOCALIZE_ME
+  reset_success: LOCALIZE_ME
+  start_over: LOCALIZE_ME
+  start_over_yes: LOCALIZE_ME
+  start_over_no: LOCALIZE_ME
+  skip_step: LOCALIZE_ME
+  abort_report: LOCALIZE_ME
+  latest_not_allowed: LOCALIZE_ME
+  love_letter: LOCALIZE_ME
+  no_numbers: LOCALIZE_ME
+  text_too_long: LOCALIZE_ME
+  report_header: LOCALIZE_ME
+  report_timeout: LOCALIZE_ME
+  attachments_yes: LOCALIZE_ME
+  attachment_info: LOCALIZE_ME
+  attachment_info_plural: LOCALIZE_ME
+  report_confirmation: LOCALIZE_ME
+  maint_check_fail: LOCALIZE_ME
+  bugs_all_done: LOCALIZE_ME
+  none_in_progress: LOCALIZE_ME
+  report_channel_permissions_fail: LOCALIZE_ME
+  dead_bugs_cleaned: LOCALIZE_ME
+  maint_on: LOCALIZE_ME
+  maint_off: LOCALIZE_ME
+  question_ready: LOCALIZE_ME
+  platform: LOCALIZE_ME
+  question_platform: LOCALIZE_ME
+  question_platform_version: LOCALIZE_ME
+  device_info: LOCALIZE_ME
+  question_device_info: LOCALIZE_ME
+  device_info_switch: LOCALIZE_ME
   device_info_ios: |
   device_info_android: |
   device_info_playstation: |
-  device_info_windows: |
-    --jp-- Help us by providing the following details about your system:
-    
-    > 1. CPU model
-    > 2. GPU model
-    > 3. Physical RAM
-  question_app_branch: |
-    --jp-- ```css
-    Sky App Type
-    ```
-    Are you using the `Live` or `Beta` version of Sky?
-    Beta is installed through TestFlight on iOS, through Google Groups on Android, or via invite code on Nintendo Switch.
-    If you are unsure, then choose Live
-  app_version: --jp-- Sky app version
-  question_app_version: |
-    --jp-- ```css
-    Sky App Version Number
-    ```
-    What **version** of the Sky app were you using when you experienced the bug?
-    {version_help}
-  app_build: --jp-- Sky app build
-  question_app_build: |
-    --jp-- ```css
-    Sky App Build Number
-    ```
-    What **build** of the Sky app were you using when you experienced the bug?
-    See the instructions above. The build number is in parentheses or 6 digits at the end of the version number.
-  version_android: |
-    --jp-- **To find Sky version and build on Android devices:**
-    > 1. Device settings
-    > 2. Apps
-    > 3. Sky
-    > 4. Scroll down to find: `Version X.X.X (XXXXXX)`
-    > 5. The first 3 digits, `X.X.X` are the version, the 6 digits in parentheses are the build number
-    https://media.discordapp.net/attachments/575818186440572938/623647193143836674/sky_version_build3.jpg
-  version_ios: |
-    --jp-- **To find Sky version and build on iOS devices:**
-    > 1. Device settings
-    > 2. Scroll down to Sky
-    > 3. Scroll down to find: `Version X.X.X (XXXXXX)`
-    > 4. The first 3 digits, `X.X.X` are the version, the 6 digits in parentheses are the build number
-    https://media.discordapp.net/attachments/575818186440572938/623643882445471764/sky_version_ios2.png
-  version_switch: |
-    --jp-- **To find the Sky build number for bug reporting:**
-    > 1. Navigate to the Nintendo Switch home screen
-    > 2. Select sky
-    > 3. Press the **+** button on your controller
-    > 4. Version info will be in small print right beneath the game title. Find `Ver. X.X.X.XXXXXX`
-    > 5. The first 3 digits, `X.X.X` are the version, and the last 6 digits are the build number
-    https://media.discordapp.net/attachments/834518314264821810/840007394154774539/unknown.png
-  version_playstation: |
-    --jp-- **To find the Sky app version for bug reporting:**
-    > 1. Navigate to the main PS menu.
-    > 2. Highlight Sky.
-    > 3. Press the options button on your controller.
-    > 4. App version will show up under “Information”.
-    https://cdn.discordapp.com/attachments/623178459438645248/1050614478825336883/ps_info.png
-  version_windows: |
-    --jp-- **To find the Sky version and build number on Windows:**
-    **To find the Sky version and build number on Windows:**
-    > 1. Boot the game to the Title Screen (The screen with the Play button)
-    > 2. Look for the number in the bottom left corner (formatted as 0.0.0.X)
-    > 3. Please provide the full number
-  title: --jp-- Title/Topic
-  question_title: |
-    --jp-- ```css
-    Title/Topic
-    ```
-    Provide a brief title or topic for your bug ({max} characters max)
-  description: --jp-- Bug description
-  question_actual: |
-    --jp-- ```css
-    Describe the bug
-    ```
-    Describe the problem you experienced, what looked or worked the wrong way. I'll ask for steps to reproduce the problem next, so don't tell me *how* it happened yet ({max} characters max)
-  steps_to_reproduce: --jp-- Steps to reproduce
-  question_steps: |
-    --jp-- ```css
-    How to Reproduce the Bug
-    ```
-    How did the bug happen? Tell me the steps you took that lead to the problem ({max} characters max). Example:
-    ```
-    - step 1
-    - step 2
-    - step 3
-    ```
-  expected: --jp-- Expected outcome
-  question_expected: |
-    --jp-- ```css
-    Expectation
-    ```
-    When following the steps you gave, what did you expect to happen ({max} characters max)?
-  additional_info: --jp-- Additional information
-  question_additional: |
-    --jp-- ```css
-    Additional Information
-    ```
-    Do you have any other information to add to this report?
-  question_additional_info: --jp-- What other information would you like me to include in your report?
-  additional_info_yes: --jp-- Provide additional information
-  question_attachments: |
-    --jp-- ```css
-    Attachments
-    ```
-    Do you have screenshots, videos, or other documents to add? Video may be attached directly to this report, but size is limited for direct messages. If your video is too large, you can share it in the appropriate screenshot channel or on a site like youtube and add a link to your report instead.
-  question_attachments_windows: |
-    --jp-- 🖥️ __**For Windows players**__ 🖥️
-    It's important to provide us with a .txt file of **DxDiag** info, so __**please react YES**__ and provide that in the next step.
-    
-    How to obtain DxDiag information:
-    > 1. From the Windows desktop, type dxdiag in the search field of the Windows taskbar.
-    > 1. Select the dxdiag Run command from the populated list.
-    > 1. In the DirectX Diagnostic Tool window, choose Save All Information.
-    > 1. In the Save As window, the DirectX information is saved as a text (.TXT) file. Choose the Desktop or another easily accessible location to save your file, and then click Save.
-  question_ok: --jp-- This is what your report will look like. Should I **submit** it or **discard** it? You have **{timeout} to review.**
-  send_report: --jp-- All done! Send this report
-  mistake: --jp-- Nope, I made a mistake. Throw away this report and start again
-  no_live_android: --jp-- There is no live version available on Android yet, only beta. Go back to the bug report channel any time to start a new report!
-  no_live_windows: --jp-- There is no live version available on Windows yet, only beta. Go back to the bug report channel any time to start a new report!
-  dm_unable: '--jp-- {user}, I was unable to DM you for questions about your bug, Please allow DMs from this server to file bug reports. You can enable this in the privacy settings, found in the server dropdown menu. Once your report is filed, you may disable DMs again if you like.'
+  device_info_windows: LOCALIZE_ME
+  question_app_branch: LOCALIZE_ME
+  app_version: LOCALIZE_ME
+  question_app_version: LOCALIZE_ME
+  app_build: LOCALIZE_ME
+  question_app_build: LOCALIZE_ME
+  version_android: LOCALIZE_ME
+  version_ios: LOCALIZE_ME
+  version_switch: LOCALIZE_ME
+  version_playstation: LOCALIZE_ME
+  version_windows: LOCALIZE_ME
+  title: LOCALIZE_ME
+  question_title: LOCALIZE_ME
+  description: LOCALIZE_ME
+  question_actual: LOCALIZE_ME
+  steps_to_reproduce: LOCALIZE_ME
+  question_steps: LOCALIZE_ME
+  expected: LOCALIZE_ME
+  question_expected: LOCALIZE_ME
+  additional_info: LOCALIZE_ME
+  question_additional: LOCALIZE_ME
+  question_additional_info: LOCALIZE_ME
+  additional_info_yes: LOCALIZE_ME
+  question_attachments: LOCALIZE_ME
+  question_attachments_windows: LOCALIZE_ME
+  question_ok: LOCALIZE_ME
+  send_report: LOCALIZE_ME
+  mistake: LOCALIZE_ME
+  no_live_android: LOCALIZE_ME
+  no_live_windows: LOCALIZE_ME
+  dm_unable: LOCALIZE_ME
 eden:
-  reset: |
-    --jp-- The Eye of Eden resets once per week.
-    Next reset happens {reset} (In {countdown})
-  tz_help: --jp-- I couldn't find a timezone called '{tz}.' Maybe you can find your timezone in this list <https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568>
-  tz_mention: --jp-- I'm not falling for that again
-  cool_it: --jp-- Cool it, {author}. Try again in {remain}
-  channel_cooldown: --jp-- I just... didn't I just answer that question {author}?
-common:
-  nope: --jp-- Something isn't right...
-  which_one: --jp-- Which one would you like? (type a number)
-  you_chose_codeblock: --jp-- You chose ```{value}```
-  you_chose_bold: --jp-- You chose **{value}**
-  expect_integer: --jp-- I was hoping for one of these values ```{keys}```
-test: --jp-- test this
+  reset: LOCALIZE_ME
+  tz_help: LOCALIZE_ME
+  tz_mention: LOCALIZE_ME
+  cool_it: LOCALIZE_ME
+  channel_cooldown: LOCALIZE_ME
 welcome:
-  welcome_msg: --jp-- Welcome, {user}! Please read through all the items posted in our {rules_channel} channel. When you're done, click the {accept_emoji} emote at the end of the rules to join the community and gain access to the other channels.
-  welcome_mute_msg: |
-    --jp-- **New members will need to wait a few minutes before chat is allowed;** until then, look around in the channels and get to know the server!
-  welcome_help: --jp-- Hi {author}! If you'd like to access the rest of the channels and chat with other members, please read the {rules_channel} and follow the directions there. If you're having trouble with reactions, make sure they're enabled in **user settings > text and images > show emoji reactions on messages**
-  darkness: --jp-- I see {unverified} lost soul lurking near, and {too_old} who may never find the light.
-  darkness_plural: --jp-- I see {unverified} lost souls lurking near, and {too_old} who may never find the light.
-  darkened: |
-    --jp-- {count} of my children have fallen into darkness.
-  darkened_plural: |
-    --jp-- {count} of my children have fallen into darkness.
-  mute_settings_title: --jp-- New member mute settings for {server_name}
-  help: |
-    --jp-- `welcome` help:
-      `!welcome` Show this message
-
-    Sub-commands:
-      `!welcome [mute_config|configmute|muteconfig|configure_mute|mute_configure|mute] [on|off|1|0|yes|no] [minutes] [minutes]`
-      ```With no arguments, check the new member mute configuration. With arguments, turn muting on/off, and set duration (in minutes) for regular accounts, and for accounts created within the last 1 day.```
-      `!welcome [count|cr|count_recent] [hours=1]`
-      ```Count the members who have joined recently (within specified number of hours) but don't have member role.```
-      `!welcome [darken|darkness|give_shadows|give_shadow] [hours=1] [add_role=0]`
-      ```Count the members who have joined recently (within specified number of hours) but don't have member role or the nonmember role. Optionally add the nonmember role.```
-      `!welcome [nonmember|shadows|shadow|ping_unverified]`
-      ```Send a welcome message that pings the nonmember role in the welcome channel. (Warning: this could ping a large number of people so check the count first)```
-      `!welcome recent [hours=1] [ping=False]`
-      ```Count the members who have joined recently (within specified number of hours) but don't have member role. Optionally welcome each recent member individually in the welcome channel. Be sure the run without ping first so you know how many will be welcomed.```
+  welcome_msg: LOCALIZE_ME
+  welcome_mute_msg: LOCALIZE_ME
+  welcome_help: LOCALIZE_ME
+  darkness: LOCALIZE_ME
+  darkness_plural: LOCALIZE_ME
+  darkened: LOCALIZE_ME
+  darkened_plural: LOCALIZE_ME
+  mute_settings_title: LOCALIZE_ME
+  help: LOCALIZE_ME
 lang:
-  default_set: --jp-- Server `{server_name}` now has '{locale}' as its default language.
-  default_not_changed: --jp-- Default language for server `{server_name}` was alaredy `{locale}`. No changes recorded.
-  lang_settings_title: |
-    --jp-- **Language/locale settings** in `{server_name}` server
-  unknown_locale: |
-    --jp-- `{locale}` is not a locale I know. Try one from this list: `{locale_lsit}`
-  reloaded: --jp-- Language files reloaded for `{server_name}` server
-  channel_not_unset: --jp-- I can't unset channel locale, because channel locale is not set for <#{channelid}>
-  channel_unset: --jp-- Channel locale `{old_value}` been **unset**. Server locale will be used.
-  channel_already_set: --jp-- Locale is already `{locale}` in <#{channelid}>
-  channel_set: --jp-- Channel <#{channelid}> now has `{locale}` as its default language.
-  test: --jp-- key {lang_key} in locale {locale} says ```{result}```
-  test_failed: --jp-- I tried to find `{lang_key}` in the `{locale}` locale, but couldn't
+  default_set: LOCALIZE_ME
+  default_not_changed: LOCALIZE_ME
+  lang_settings_title: LOCALIZE_ME
+  unknown_locale: LOCALIZE_ME
+  reloaded: LOCALIZE_ME
+  channel_not_unset: LOCALIZE_ME
+  channel_unset: LOCALIZE_ME
+  channel_already_set: LOCALIZE_ME
+  channel_set: LOCALIZE_ME
+  test: LOCALIZE_ME
+  test_failed: LOCALIZE_ME
 dropbox:
-  list: --jp-- Dropbox list for {server_name}.
-  added: --jp-- Messages sent in {source} will now be delivered to {target}
-  updated: --jp-- I updated a dropbox. Messages sent in {source} will now be delivered to {new_target} isntead of {old_target}
-  not_updating: --jp-- Keeping the old one.
-  removed: --jp-- Messages sent in {source} will no longer be redirected
-  not_removed: --jp-- There's no dropbox for channel {source}
-  channel_not_found: --jp-- Sorry, I couldn't find a channel with id {channel_id}
-  override_confirmation: --jp-- The channel {source} already delivers messages to {old_target}; do you want to change the target to {new_target}?
-  set_delay_success: Confirmation messages in dropbox channel {channel} will be deleted after {time}
-  set_delay_fail: Failed to set dropbox delete delay time in {channel}
-  msg_delivered: --jp-- {author} Your message was delivered
-  msg_not_delivered: --jp-- {author} Your message was **not** delivered Please try again, or contact a moderator
-  msg_blank: --jp-- I didn't find any text content in the original message
-  attachment_fail: --jp-- Attachment from {author} failed. Censored or deleted by member?
-  msg_receipt: --jp-- Here's a copy of the dropbox message you sent in {channel}
-  receipt_set_true: --jp-- receipt set. authors will be DMed a copy of their message in {channel}.
-  receipt_set_false: --jp-- receipt set. authors won't be DMed for their messages in {channel}.
-  receipt_attachment_singular: "--jp-- {number} attached file: {attachments}"
-  receipt_attachment_plural: "--jp-- {number} attached files: {attachments}"
+  list: LOCALIZE_ME
+  added: LOCALIZE_ME
+  updated: LOCALIZE_ME
+  not_updating: LOCALIZE_ME
+  removed: LOCALIZE_ME
+  not_removed: LOCALIZE_ME
+  channel_not_found: LOCALIZE_ME
+  override_confirmation: LOCALIZE_ME
+  set_delay_success: LOCALIZE_ME
+  set_delay_fail: LOCALIZE_ME
+  msg_delivered: LOCALIZE_ME
+  msg_not_delivered: LOCALIZE_ME
+  msg_blank: LOCALIZE_ME
+  attachment_fail: LOCALIZE_ME
+  msg_receipt: LOCALIZE_ME
+  receipt_set_true: LOCALIZE_ME
+  receipt_set_false: LOCALIZE_ME
+  receipt_attachment_singular: LOCALIZE_ME
+  receipt_attachment_plural: LOCALIZE_ME
 autoresponder:
-  mod_action_header: --jp-- Moderator actions
-  mod_action_warning: --jp-- Moderator action flag will be ignored if response channel is not set. Use `!autoresponder setchannel`
-  you_chose: --jp-- You chose **{value}**
-  list: --jp-- Auto-responder list for {server_name}.
-  raw: --jp-- Auto-responder raw trigger/response in {server_name}.
-  none_set: --jp-- No auto-responders have been created yet.
-  no_commands: --jp-- No auto-responders have been created yet.
-  trigger_too_long: --jp-- Auto-responder triggers can only be up to 100 chars long
-  added: --jp-- Auto-responder for `{trigger}` has been added! id is `{trigid}`.
-  removed: --jp-- Auto-responder `{trigger}` has been removed.
-  updated: --jp-- Auto-responder `{trigger}` has been updated!
-  chanceset: --jp-- Chance that `{trigger}` will trigger a response is now {chance}%
-  override_confirmation: --jp-- This auto-responder already exists, do you want to replace it with this new text?
-  empty_reply: --jp-- Empty response? Why bother with me at all. Just shout your triggers into the wind and you already get no response! (use remove if you want me to stop responding to a trigger)
-  empty_trigger: --jp-- Your trigger is empty... so... you want me to react to *literally nothing??*
-  channel_unset: --jp-- Okay, I'll {mode} to `{trigger}` in the same channel it's matched in
-  channel_set: --jp-- Okay, I'll {mode} to `{trigger}` in {channel}
-  no_channel: --jp-- No channel set.
-  updating: --jp-- Updating...
-  not_updating: --jp-- Keeping the old one.
-  not_found: --jp-- Unable to find trigger `{trigger}`.
-  creating: --jp-- This auto-responder does not exist, making it for you instead.
-  which_flag: |
-    --jp-- Which flag do you want? (type a number)
-    {options}
-  which_mode: --jp-- Set channel to listen in, or channel to respond in?
-  which_trigger: --jp-- Which trigger would you like? (type a number)
-  available_triggers: |
-    --jp-- **Available auto-responder triggers**:
-  prompt_channel_id: --jp-- Which channel should this trigger {mode} in? (channel id)
-  prompt_response: --jp-- How would you like me to respond?
-  prompt_trigger: --jp-- What should the new trigger be?
-  prompt_chance: --jp-- How often should I respond? (floating point percent e.g. `35.15`)
-  on_or_off: |
-    --jp-- `{subject}` on or off?
-  expect_integer: --jp-- I was hoping for one of these values ```{keys}```
+  mod_action_header: LOCALIZE_ME
+  mod_action_warning: LOCALIZE_ME
+  you_chose: LOCALIZE_ME
+  list: LOCALIZE_ME
+  raw: LOCALIZE_ME
+  none_set: LOCALIZE_ME
+  no_commands: LOCALIZE_ME
+  trigger_too_long: LOCALIZE_ME
+  added: LOCALIZE_ME
+  removed: LOCALIZE_ME
+  updated: LOCALIZE_ME
+  chance_set: LOCALIZE_ME
+  override_confirmation: LOCALIZE_ME
+  empty_reply: LOCALIZE_ME
+  empty_trigger: LOCALIZE_ME
+  channel_unset: LOCALIZE_ME
+  channel_set: LOCALIZE_ME
+  no_channel: LOCALIZE_ME
+  updating: LOCALIZE_ME
+  not_updating: LOCALIZE_ME
+  not_found: LOCALIZE_ME
+  creating: LOCALIZE_ME
+  which_flag:  LOCALIZE_ME
+  which_trigger: LOCALIZE_ME
+  available_triggers: LOCALIZE_ME
+  prompt_channel_add_listen: LOCALIZE_ME
+  prompt_channel_add_response: LOCALIZE_ME
+  prompt_channel_add_log: LOCALIZE_ME
+  prompt_channel_add_ignore: LOCALIZE_ME
+  prompt_channel_add_mod: LOCALIZE_ME
+  prompt_channel_remove_listen: LOCALIZE_ME
+  prompt_channel_remove_response: LOCALIZE_ME
+  prompt_channel_remove_log: LOCALIZE_ME
+  prompt_channel_remove_ignore: LOCALIZE_ME
+  prompt_response: LOCALIZE_ME
+  prompt_trigger: LOCALIZE_ME
+  prompt_chance: LOCALIZE_ME
+  on_or_off: LOCALIZE_ME
+  expect_integer: LOCALIZE_ME
 krill:
-  config_title: --jp-- Krill Configuration for {server_name}
-  config_bylines_title: --jp-- Krill bylines for {server_name}
-  list_channels: --jp-- Krill channels for {server_name}.
-  list_oreo_filter: --jp-- Oreo filters for {server_name}.
-  list_oreo_monsters: --jp-- The most horrible people in the _"{server_name}"_ server.
-  no_channels: --jp-- No channels set for krill command. `!krill` may be used in any channel.
-  channel_added: --jp-- Channel {channel} is now approved for krilling.
-  channel_removed: --jp-- Channel {channel} has been fumigated. No more krill allowed.
-  channel_not_found: --jp-- There are no krill in {channel}
-  channel_found: --jp-- The channel {channel} is already infested by krill
-  letter_not_found: --jp-- the character "{letter}" is not in my filters
-  smells_clean: --jp-- All the letters in "{value}" are already covered.
-  invalid_letter_category: --jp-- You can only use letters `{categories}`
-  bad_person: --jp-- Bad Person
-  letter_already_filtered: --jp-- That {letter} is already on the list
-  letter_filter_added: --jp-- I added "{letter}" to the {category} list!
-  letter_not_filtered: --jp-- That {letter} is not on the list
-  letter_filter_removed: --jp-- I removed "{letter}" from the {category} list!
-  oreo_cooldown_reset: --jp-- Oreo cooldown reset
-  no_monsters: --jp-- There are no monsters in sight!
-  monster_added: |
-    --jp-- {name} is a monster
-  monster_removed: |
-    --jp-- {name} isn't a monster anymore
-  member_ignored: |
-    --jp-- {name} is ignored
-  member_not_ignored: |
-    --jp-- {name} isn't a ignored anymore
-  member_not_found: --jp-- beep boop, no {name} here
-  oreo_cooldown_message: |
-    --jp-- {name} is a horrible person and can spend the next {time_remaining} thinking about what they've done
-  not_oreo: --jp-- not Oreo! {victim_name}, you monster!!
-  dirty_trick: --jp-- That's a dirty trick, {name}, and I'm not falling for it
-  too_much_text: --jp-- too much text!
-  too_many_emoji: --jp-- too many emoji!
-  nice_try: --jp-- rofl nice try!
-  summoned_by: |
-    --jp-- *summoned by {name}*
-  evaded_by: |
-    --jp-- *evaded by {name}*
-  cooldown_message: --jp-- Cool it, {name}. Try again in {time_remaining}
-  no_such_channel: |
-    --jp-- No such channel: `{channel_id}`
-  available_bylines: |
-    **Available krill bylines:**
-  duplicate_byline: --jp-- That one already exists. Try something different.
-  confirm_byline: |
-    --jp-- Does this look right?
-    {formatted_byline}
-  add_byline: --jp-- New krill byline added. {byline}
-  remove_byline: --jp-- Byline {number} removed.
-  not_changing_byline: --jp-- Ok, no changes. Gimme a call when you make up your mind.
+  config_title: LOCALIZE_ME
+  config_bylines_title: LOCALIZE_ME
+  list_channels: LOCALIZE_ME
+  list_oreo_filter: LOCALIZE_ME
+  list_oreo_monsters: LOCALIZE_ME
+  no_channels: LOCALIZE_ME
+  channel_added: LOCALIZE_ME
+  channel_removed: LOCALIZE_ME
+  channel_not_found: LOCALIZE_ME
+  channel_found: LOCALIZE_ME
+  letter_not_found: LOCALIZE_ME
+  smells_clean: LOCALIZE_ME
+  invalid_letter_category: LOCALIZE_ME
+  bad_person: LOCALIZE_ME
+  letter_already_filtered: LOCALIZE_ME
+  letter_filter_added: LOCALIZE_ME
+  letter_not_filtered: LOCALIZE_ME
+  letter_filter_removed: LOCALIZE_ME
+  oreo_cooldown_reset: LOCALIZE_ME
+  no_monsters: LOCALIZE_ME
+  monster_added: LOCALIZE_ME
+  monster_removed: LOCALIZE_ME
+  member_ignored: LOCALIZE_ME
+  member_not_ignored: LOCALIZE_ME
+  member_not_found: LOCALIZE_ME
+  oreo_cooldown_message: LOCALIZE_ME
+  not_oreo: LOCALIZE_ME
+  dirty_trick: LOCALIZE_ME
+  too_much_text: LOCALIZE_ME
+  too_many_emoji: LOCALIZE_ME
+  nice_try: LOCALIZE_ME
+  summoned_by: LOCALIZE_ME
+  evaded_by: LOCALIZE_ME
+  cooldown_message: LOCALIZE_ME
+  no_such_channel: LOCALIZE_ME
+  available_bylines: LOCALIZE_ME
+  duplicate_byline: LOCALIZE_ME
+  add_byline: LOCALIZE_ME
+  confirm_byline: LOCALIZE_ME
+  remove_byline: LOCALIZE_ME
+  not_changing_byline: LOCALIZE_ME
 react_monitor:
-  info_title: --jp-- Emoji reaction monitor settings for {server_name}
+  info_title: LOCALIZE_ME
 art:
-  list_channels: --jp-- Art channels for {server_name}.
-  no_channels: --jp-- No channels set for art collection. No art will be colelcted
-  channel_added: --jp-- Channel {listenchannel} is now approved for arting. Collecting "\#{tag}" into {collectchannel}
-  channel_not_found: --jp-- I didn't find a collector for {listenchannel}, "\#{tag}"->{collectchannel}
-  channel_found: --jp-- The channel {listenchannel} is already collecting art "\#{tag}"->{collectchannel}
-  channel_removed: --jp-- There's been a robbery at the art museum! Channel {listenchannel} can't collect art anymore! "\#{tag}"->{collectchannel}
-  no_such_channel: |
-    --jp-- No such channel: `{listen_channel_id}`
-  remove_channel_failed: --jp-- That's not an art channel... or tag... or ?? something?
+  list_channels: LOCALIZE_ME
+  no_channels: LOCALIZE_ME
+  channel_added: LOCALIZE_ME
+  channel_not_found: LOCALIZE_ME
+  channel_found: LOCALIZE_ME
+  channel_removed: LOCALIZE_ME
+  no_such_channel: LOCALIZE_ME
+  remove_channel_failed: LOCALIZE_ME
 custom_commands:
-  list_commands: --jp-- Custom command list for {server_name}.
-  no_commands: --jp-- No custom commands have been created yet.
-  empty_trigger: --jp-- Empty triggers, isn't that like empty promises? Something you shouldn't do?
-  empty_reply: --jp-- You want me to say nothing for that trigger? That makes no sense. If you want to remove an existing trigger then please use remove instead.
-  trigger_too_long: --jp-- Custom command triggers can only be up to 20 chars long
-  command_added: --jp-- Command `{trigger}` has been added!
-  updating_command: --jp-- Updating...
-  not_updating_command: --jp-- Keeping the old one.
-  override_confirmation: --jp-- This command already exists, do you want to replace it with this new text?
-  command_removed: --jp-- Command `{trigger}` has been removed.
-  not_found: --jp-- Unable to remove `{trigger}` as it doesn't seem to exist.
-  creating_command: --jp-- This command does not exist, making it for you instead.
-  command_updated: --jp-- Command `{trigger}` has been updated!
-  deletetrigger_trigger_updated: |
-    --jp-- Command `{trigger}` delete triggering command: `{value}`
-  reply_trigger_updated: |
-    --jp-- Command `{trigger}` reply to command author: `{value}`
+  list_commands: LOCALIZE_ME
+  no_commands: LOCALIZE_ME
+  empty_trigger: LOCALIZE_ME
+  empty_reply: LOCALIZE_ME
+  trigger_too_long: LOCALIZE_ME
+  command_added: LOCALIZE_ME
+  updating_command: LOCALIZE_ME
+  not_updating_command: LOCALIZE_ME
+  override_confirmation: LOCALIZE_ME
+  command_removed: LOCALIZE_ME
+  not_found: LOCALIZE_ME
+  creating_command: LOCALIZE_ME
+  command_updated: LOCALIZE_ME
+  deletetrigger_trigger_updated: LOCALIZE_ME
+  reply_trigger_updated: LOCALIZE_ME
 word_counter:
-  list_words: --jp-- Words being counted for metrics in the {server_name} server
-  no_words: --jp-- There are no words currently being counted.
-  word_added: --jp-- The word "{word}" is now being counted.
-  word_found: --jp-- The word "{word}" is already being counted.
-  word_removed: --jp-- The word "{word}" is no longer being counted.
-  word_not_found: --jp-- I didn't find the word "{word}" in the database
+  list_words: LOCALIZE_ME
+  no_words: LOCALIZE_ME
+  word_added: LOCALIZE_ME
+  word_found: LOCALIZE_ME
+  word_removed: LOCALIZE_ME
+  word_not_found: LOCALIZE_ME
 sweeps:
-  jumpurl_prompt: --jp-- Please provide a jumpurl or [channel_id]/[message_id]
-  unique_result: --jp-- There are {count} entrants (unique reactions) to this drawing.
-  total_entries: --jp-- There are {count} total entries to this drawing.
-  all_invalid_emoji: --jp-- All of the reaction emojis come from other servers. I won't be able to add any reactions. Do you still want to clear reactions?
-  some_invalid_emoji: --jp-- Some of the reaction emojis come from other servers. I won't be able to add them all back. Do you still want to clear reactions?
-  invalid_emoji_confirm: --jp-- Ok I'll continue, but there are at least {count} emoji that I can't add back to the original message. You may need to add some yourself!
-  no_reactions: --jp-- No reactions on that message. Aborting.
-  removing_reactions: |
-    --jp-- ```Removing reactions from message (ending entry period)...```
-  adding_reactions: |
-    --jp-- ```Adding reactions to message (restarting entry period)...```
-  adding_reactions_progress: Added these reactions -
-  emoji_fail: --jp-- Failed to add emoji {emoji} (permissions? emoji comes from another server?)
-  partial_emoji_fail: |
-    --jp-- ```Failed to add all reactions back to the original message. You might need to add some manually```
-  drawing_closed: |
-    --jp-- ```Reactions removed. Drawing entry closed.```
-  drawing_restarted: |
-    --jp-- ```Reactions reset. Drawing entry restarted.```
-  fetch_message_failed: --jp-- Failed to get message {channel_id}/{message_id}
-  fetch_entries_failed: --jp-- Failed to get entries {channel_id}/{message_id}
-  entries_sub_command: --jp-- Sub-command required. try `sweeps entries unique` or `sweeps entries all`
-  end_sweeps_sub_command: --jp-- Sub-command required. try `sweeps end clear` or `sweeps end restart`
-  help: |
-    --jp-- `sweeps` help:
-      `![sweeps|drawing]` sub-command required
-
-    Sub-commands:
-      `!sweeps [help|h]` This message
-      `!sweeps [entries]` sub-command required
-      `!sweeps [end|cancel|stop]` sub-command required
-
-    Entries Sub-commands:
-      `!sweeps entries [unique] jump_url` fetch a list of unique entrants (users reacting to message)
-      `!sweeps entries [all] jump_url` fetch a list of all entrants, including multiple emoji per user
-
-    End Sub-commands:
-      `!sweeps end [clear|clean] jump_url` List entrants and remove all reactions
-      `!sweeps end [reset|restart] jump_url` List entrants to-date and reset reactions to starting state
+  jumpurl_prompt: LOCALIZE_ME
+  unique_result: LOCALIZE_ME
+  total_entries: LOCALIZE_ME
+  all_invalid_emoji: LOCALIZE_ME
+  some_invalid_emoji: LOCALIZE_ME
+  invalid_emoji_confirm: LOCALIZE_ME
+  no_reactions: LOCALIZE_ME
+  removing_reactions: LOCALIZE_ME
+  adding_reactions: LOCALIZE_ME
+  adding_reactions_progress: LOCALIZE_ME
+  emoji_fail: LOCALIZE_ME
+  partial_emoji_fail: LOCALIZE_ME
+  drawing_closed: LOCALIZE_ME
+  drawing_restarted: LOCALIZE_ME
+  fetch_message_failed: LOCALIZE_ME
+  fetch_entries_failed: LOCALIZE_ME
+  entries_sub_command: LOCALIZE_ME
+  end_sweeps_sub_command: LOCALIZE_ME
+  help: LOCALIZE_ME
 music:
-  dm_unable: '--jp-- {user}, I was unable to DM you to transcribe a song. You can enable this in the privacy settings, found in the server dropdown menu.'
-  text_too_long: --jp-- Text response is too long, {max} characters is the max.
-  abort_song: --jp-- Ok, I won't ask you any more questions for now. Call me again to start a new song!
-  song_timeout: --jp-- This song creation has been canceled. Call me again to start a new song!
-  song_trash: --jp-- Sorry to bother you, but you had an in-progress song that was idle for too long. I canceled it. If you think you received this message in error, please report me to the proper authorites (a moderator in the Sky server)
-  start_over: '--jp-- {user} You are already in the middle of creating a song. Do you want to cancel that song to start a new one?'
-  start_over_yes: --jp-- Cancel my song and start a new one
-  start_over_no: --jp-- Do not cancel my current song creation
+  dm_unable: LOCALIZE_ME
+  text_too_long: LOCALIZE_ME
+  abort_song: LOCALIZE_ME
+  song_timeout: LOCALIZE_ME
+  song_trash: LOCALIZE_ME
+  start_over: LOCALIZE_ME
+  start_over_yes: LOCALIZE_ME
+  start_over_no: LOCALIZE_ME

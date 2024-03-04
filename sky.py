@@ -2,22 +2,24 @@ import asyncio
 import os
 import signal
 import sys
+from typing import Optional
 from asyncio import shield
 
+import discord
 import sentry_sdk
-from discord.ext import commands
-from discord.ext.commands import Bot
+from aerich import Command
 from aiohttp import ClientOSError, ServerDisconnectedError
-from discord import ConnectionClosed, Intents, AllowedMentions
+from discord import ConnectionClosed, Intents, AllowedMentions, HTTPException, Embed
+from discord.ext import commands
+from discord.ext.commands import Bot, Context
 from prometheus_client import CollectorRegistry
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from tortoise import Tortoise
-from aerich import Command
 
 import utils.tortoise_settings
 from utils import Logging, Configuration, Utils, Emoji, Database, Lang, dbbackup
+from utils.Database import BotAdmin, Guild, AdminRole
 from utils.Logging import TCol
-from utils.Database import BotAdmin, Guild
 from utils.PrometheusMon import PrometheusMon
 
 running = None
@@ -61,7 +63,7 @@ class Skybot(Bot):
                     self,
                     e)
         Logging.info(f"{TCol.cBold}{TCol.cOkGreen}Cog loading complete{TCol.cEnd}{TCol.cEnd}")
-        self.db_keepalive = self.loop.create_task(self.keepDBalive())
+        self.db_keepalive = self.loop.create_task(self.keep_db_alive())
         self.loaded = True
         Logging.info(f'{TCol.cUnderline}{TCol.cWarning}setup_hook end{TCol.cEnd}{TCol.cEnd}')
 
@@ -106,42 +108,51 @@ class Skybot(Bot):
             Utils.get_embed_and_log_exception("--------Failed to get config--------", self, e)
             return None
 
-    def get_config_channel(self, guild_id: int, channel_name: str):
-        # TODO: replace usage with get_guild_*_channel above
-        if Utils.validate_channel_name(channel_name):
-            try:
-                this_channel_id = self.config_channels[guild_id][channel_name]
-                # TODO: catch keyerror and log in guild that channel is not configured
-                return self.get_channel(this_channel_id)
-            except Exception as ex:
-                pass
-        return None
-
-    async def permission_manage_bot(self, ctx):
+    async def permission_manage_bot(self, ctx: Context):
         is_admin = await self.member_is_admin(ctx.author.id)
         # Logging.info(f"admin: {'yes' if is_admin else 'no'}")
-        has_admin_role = False
+        if is_admin:
+            return True
+
         if ctx.guild:
+            guild_row = await self.get_guild_db_config(ctx.guild.id)
+            config_role_ids = Configuration.get_var("admin_roles", [])  # roles saved in the config
+            db_admin_roles = await guild_row.admin_roles.filter()  # Roles saved in the db for this guild
+            db_admin_role_ids = [row.roleid for row in db_admin_roles]
+            admin_role_ids = db_admin_role_ids + config_role_ids
+            admin_roles = Utils.id_list_to_roles(ctx.guild, admin_role_ids)
+
             for role in ctx.author.roles:
-                if role in Configuration.get_var("admin_roles", []):
-                    has_admin_role = True
-        # Logging.info(f"has_admin_role: {'yes' if has_admin_role else 'no'}")
-        return is_admin or has_admin_role
+                if role in admin_roles:
+                    return True
 
     async def member_is_admin(self, member_id):
         is_owner = await self.is_owner(self.get_user(member_id))
         is_db_admin = await BotAdmin.get_or_none(userid=member_id) is not None
         in_admins = member_id in Configuration.get_var("ADMINS", [])
-        # Logging.info(f"owner: {'yes' if is_owner else 'no'}")
-        # Logging.info(f"db_admin: {'yes' if is_db_admin else 'no'}")
-        # Logging.info(f"in_admins: {'yes' if in_admins else 'no'}")
+        if False:
+            Logging.info(f"owner: {'yes' if is_owner else 'no'}")
+            Logging.info(f"db_admin: {'yes' if is_db_admin else 'no'}")
+            Logging.info(f"in_admins: {'yes' if in_admins else 'no'}")
         return is_db_admin or is_owner or in_admins
 
-    async def guild_log(self, guild_id: int, message=None, embed=None):
+    async def guild_log(self, guild_id: int, msg: Optional[str] = None, embed: Optional[Embed] = None):
+        if not (msg or embed):
+            # can't send nothing, so return none
+            return None
+
         channel = await self.get_guild_log_channel(guild_id)
-        if channel and (message or embed):
-            return await channel.send(content=message, embed=embed, allowed_mentions=AllowedMentions.none())
-        return None
+        if channel:
+            try:
+                sent = await channel.send(content=msg, embed=embed, allowed_mentions=AllowedMentions.none())
+                return sent
+            except HTTPException:
+                pass
+        
+        # No channel, or send failed. Send notice in bot server:
+        sent = await Logging.bot_log(f"server {guild_id} is misconfigured for logging. Failed message:"
+                                     f"```{msg}```", embed=embed)
+        return sent
 
     async def close(self):
         Logging.info("Shutting down?")
@@ -161,7 +172,7 @@ class Skybot(Bot):
             Logging.info(f"{TCol.cWarning}cog unloading complete{TCol.cEnd}")
         return await super().close()
 
-    async def on_command_error(bot, ctx: commands.Context, error):
+    async def on_command_error(self, ctx: commands.Context, error):
         if isinstance(error, commands.BotMissingPermissions):
             await ctx.send(str(error))
         elif isinstance(error, commands.CheckFailure):
@@ -174,37 +185,41 @@ class Skybot(Bot):
         elif isinstance(error, commands.MaxConcurrencyReached):
             await ctx.send(f"Too many people are using the `{ctx.invoked_with}` command right now. Try again later")
         elif isinstance(error, commands.MissingRequiredArgument):
-            bot.help_command.context = ctx
+            self.help_command.context = ctx
             await ctx.send(
                 f"""
 {Emoji.get_chat_emoji('NO')} You are missing a required command argument: `{ctx.current_parameter.name}`
-{Emoji.get_chat_emoji('WRENCH')} Command usage: `{bot.help_command.get_command_signature(ctx.command)}`
+{Emoji.get_chat_emoji('WRENCH')} Command usage: `{self.help_command.get_command_signature(ctx.command)}`
                 """)
         elif isinstance(error, commands.BadArgument):
-            bot.help_command.context = ctx
+            self.help_command.context = ctx
             await ctx.send(
                 f"""
 {Emoji.get_chat_emoji('NO')} Failed to parse the ``{ctx.current_parameter.name}`` parameter: ``{error}``
-{Emoji.get_chat_emoji('WRENCH')} Command usage: `{bot.help_command.get_command_signature(ctx.command)}`
+{Emoji.get_chat_emoji('WRENCH')} Command usage: `{self.help_command.get_command_signature(ctx.command)}`
                 """)
+        elif isinstance(error, commands.BadLiteralArgument):
+            self.help_command.context = ctx
+            await ctx.send(f"Parameter `{error.param.name}` must be one of "
+                           f"`{', '.join(error.literals)}` but you said `{error.argument}`")
         elif isinstance(error, commands.CommandNotFound):
             return
         elif isinstance(error, commands.UnexpectedQuoteError):
-            bot.help_command.context = ctx
+            self.help_command.context = ctx
             await ctx.send(
                 f"""
 {Emoji.get_chat_emoji('NO')} There are quotes in there that I don't like
-{Emoji.get_chat_emoji('WRENCH')} Command usage: `{bot.help_command.get_command_signature(ctx.command)}`
+{Emoji.get_chat_emoji('WRENCH')} Command usage: `{self.help_command.get_command_signature(ctx.command)}`
                 """)
         else:
-            await Utils.handle_exception("Command execution failed", bot,
+            await Utils.handle_exception("Command execution failed", self,
                                          error.original if hasattr(error, "original") else error, ctx=ctx)
             # notify caller
             e = Emoji.get_chat_emoji('BUG')
             if ctx.channel.permissions_for(ctx.me).send_messages:
                 await ctx.send(f"{e} Something went wrong while executing that command {e}")
 
-    async def keepDBalive(self):
+    async def keep_db_alive(self):
         while not self.is_closed():
             # simple query to ping the db
             query = "select 1"
@@ -243,12 +258,12 @@ def before_send(event, hint):
 
 
 async def can_help(ctx):
-    return ctx.author.guild_permissions.mute_members or await Utils.BOT.permission_manage_bot(ctx)
+    return ctx.author.guild_permissions.mute_members or await this_bot.permission_manage_bot(ctx)
 
 
 async def can_admin(ctx):
-    async def predicate(ctx):
-        return await ctx.bot.permission_manage_bot(ctx)
+    async def predicate(c):
+        return await c.bot.permission_manage_bot(c)
     return commands.check(predicate)
 
 
@@ -276,6 +291,7 @@ async def queue_worker(name, queue, job, shielded=False):
         boolean indicating whether the job will be shielded from cancellation
     """
     global running
+    global this_bot
     try:
         # Logging.info(f"\t{TCol.cOkGreen}start{TCol.cEnd} {TCol.cOkCyan}`{name}`{TCol.cEnd} worker")
         while True:
@@ -288,7 +304,7 @@ async def queue_worker(name, queue, job, shielded=False):
                     await asyncio.create_task(job(work_item))
             except asyncio.CancelledError:
                 Logging.info(f"job cancelled for worker {name}")
-                if not Utils.BOT.loaded:
+                if not this_bot:
                     Logging.info(f"stopping worker {name}")
                     raise
                 Logging.info(f"worker {name} continues")
@@ -341,30 +357,31 @@ async def main():
         guilds=True,
         bans=True,
         emojis_and_stickers=True,
-        presences=True,
+        presences=False,
         reactions=True)
-    skybot = Skybot(
+    global this_bot
+    this_bot = Skybot(
         loop=loop,
         command_prefix=commands.when_mentioned_or(prefix),
         case_insensitive=True,
         allowed_mentions=AllowedMentions(everyone=False, users=True, roles=False, replied_user=True),
         intents=intents)
-    skybot.help_command = commands.DefaultHelpCommand(command_attrs=dict(name='snelp', checks=[can_help]))
-    Utils.BOT = skybot
+    this_bot.help_command = commands.DefaultHelpCommand(command_attrs=dict(name='snelp', checks=[can_help]))
+    Utils.BOT = this_bot
 
     try:
         for signal_name in ('SIGINT', 'SIGTERM'):
-            loop.add_signal_handler(getattr(signal, signal_name), lambda: asyncio.ensure_future(skybot.close()))
+            loop.add_signal_handler(getattr(signal, signal_name), lambda: asyncio.ensure_future(this_bot.close()))
     except NotImplementedError:
         pass
 
     try:
-        async with skybot:
-            await skybot.start(my_token)
+        async with this_bot:
+            await this_bot.start(my_token)
     except KeyboardInterrupt:
         pass
     finally:
-        Utils.BOT.loaded = False
+        this_bot.loaded = False
         running = False
         Logging.info(f"{TCol.cWarning}shutdown finally?{TCol.cEnd}")
         # Wait until all queued jobs are done, then cancel worker.
@@ -377,17 +394,18 @@ async def main():
         except asyncio.CancelledError:
             pass
 
-        if not skybot.is_closed():
-            await skybot.close()
+        if not this_bot.is_closed():
+            await this_bot.close()
 
+this_bot: Optional[Skybot] = None
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
-    except Exception as e:
+    except Exception as ex:
         # Who knows... log this.
-        Logging.error(f"Unhandled exception: {e}")
+        Logging.error(f"Unhandled exception: {ex}")
     finally:
         Logging.info(f"{TCol.cOkGreen}bot shutdown complete{TCol.cEnd}")

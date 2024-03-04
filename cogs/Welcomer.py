@@ -282,7 +282,7 @@ class Welcomer(BaseCog):
             return
 
         guild_row = await self.bot.get_guild_db_config(message.guild.id)
-        log_channel = self.bot.get_config_channel(message.guild.id, Utils.log_channel)
+        log_channel = await self.bot.get_guild_log_channel(message.guild.id)
         member_role = message.guild.get_role(guild_row.memberrole)
         nonmember_role = message.guild.get_role(guild_row.nonmemberrole)
 

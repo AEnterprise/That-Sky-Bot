@@ -446,18 +446,20 @@ class Krill(BaseCog):
             for byline in bylines:
                 byline_description = ""
                 if byline.locale:
-                    byline_description += f"\n**\u200b \u200b **Locale: {byline.locale}"
+                    byline_description += f"\n{Utils.DISCORD_INDENT}Locale: {byline.locale}"
                 if byline.channelid:
                     channel = ctx.guild.get_channel(byline.channelid)
-                    byline_description += f"\n**\u200b \u200b **Channel: {channel.mention}"
+                    byline_description += f"\n{Utils.DISCORD_INDENT}Channel: {channel.mention}"
                 byline_type = self.get_byline_type_id(byline.type)
                 type_description = byline_type['type'] if byline_type else "DISABLED"
                 field_name = f"[{byline.id}]`[{type_description}]`"
-                byline_description += f"\n**\u200b \u200b **message: {byline.byline}"
+                byline_description += f"\n{Utils.DISCORD_INDENT}message: {byline.byline}"
 
                 # Limit of embed count per message. Requires new message
-                if (len(embed.fields) == 25) or (len(embed) + len(byline_description) + len(field_name) > 5500):  # 5500 to be careful
-                    if len(embed) <= 6000:
+                embed_limit = 5500  # 5500 to be careful
+                send_limit = 6000  # over this and we can't send the message
+                if (len(embed.fields) == 25) or (len(embed) + len(byline_description) + len(field_name) > embed_limit):
+                    if len(embed) <= send_limit:
                         await ctx.send(embed=embed)
                     else:
                         await ctx.send(f"embed was too long ({len(embed)})... trying to log the error")

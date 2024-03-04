@@ -1,5 +1,12 @@
+test: LOCALIZE_ME
 guild_config:
   info_title: Guild base configuration for {server_name}
+common:
+  nope: Something isn't right...
+  which_one: Which one would you like? (type a number)
+  you_chose_codeblock: You chose ```{value}```
+  you_chose_bold: You chose **{value}**
+  expect_integer: I was hoping for one of these values ```{keys}```
 questions:
   text_only: I can't accept files yet. That step comes later. Just use your words
   confirm_prompt: Are you sure {backticks}{message}{backticks} is correct?
@@ -17,6 +24,7 @@ questions:
   attachment_not_found: There were no files or links in that message. Try sending again
   approve_attachments: Final answer!
   error_reaction_timeout: "{error_emoji} You didn't react within {timeout}"
+  error_reply_timeout: "{error_emoji} You didn't reply within {timeout}"
 channel_config:
   info: Channel Config for {server_name}
   channel_set: Config channel "{channel_name}" set to <#{channel_id}>
@@ -220,12 +228,6 @@ eden:
   tz_mention: I'm not falling for that again
   cool_it: Cool it, {author}. Try again in {remain}
   channel_cooldown: I just... didn't I just answer that question {author}?
-common:
-  nope: Something isn't right...
-  which_one: Which one would you like? (type a number)
-  you_chose_codeblock: You chose ```{value}```
-  you_chose_bold: You chose **{value}**
-  expect_integer: I was hoping for one of these values ```{keys}```
 welcome:
   welcome_msg: Welcome, {user}! Please read through all the items posted in our {rules_channel} channel. When you're done, click the {accept_emoji} emote at the end of the rules to join the community and gain access to the other channels.
   welcome_mute_msg: |
@@ -289,7 +291,8 @@ dropbox:
   receipt_attachment_plural: "{number} attached files: {attachments}"
 autoresponder:
   mod_action_header: Moderator actions
-  mod_action_warning: Moderator action flag will be ignored if response channel is not set. Use `!autoresponder setchannel`
+  mod_action_warning: |
+    `mod_action` is not in effect because response channel is not set. Use `!autoresponder channel add response`
   you_chose: You chose **{value}**
   list: Auto-responder list for {server_name}.
   raw: Auto-responder raw trigger/response in {server_name}.
@@ -299,28 +302,46 @@ autoresponder:
   added: Auto-responder for `{trigger}` has been added! id is `{trigid}`.
   removed: Auto-responder `{trigger}` has been removed.
   updated: Auto-responder `{trigger}` has been updated!
-  chanceset: Chance that `{trigger}` will trigger a response is now {chance}%
+  chance_set: Chance that `{trigger}` will trigger a response is now {chance}%
   override_confirmation: This auto-responder already exists, do you want to replace it with this new text?
   empty_reply: Empty response? Why bother with me at all. Just shout your triggers into the wind and you already get no response! (use remove if you want me to stop responding to a trigger)
   empty_trigger: Your trigger is empty... so... you want me to react to *literally nothing??*
-  channel_unset: Okay, I'll {mode} to `{trigger}` in the same channel it's matched in
-  channel_set: Okay, I'll {mode} to `{trigger}` in {channel}
+  channel_unset: Okay, `{channel_type}` channel {channel_desc} for `{trigger}` has been removed
+  channel_set: Okay, {channel}  will be used for `{channel_type}` when matching ```{trigger}```
   no_channel: No channel set.
   updating: Updating...
-  not_updating: Keeping the old one.
+  not_updating: There is already an auto-responder for that trigger. If you want to update responses, use `!autoresponder response [add|remove|edit|enable|disable]
   not_found: Unable to find trigger `{trigger}`.
   creating: This auto-responder does not exist, making it for you instead.
   which_flag: |
     Which flag do you want? (type a number)
     {options}
-  which_mode: Set channel to listen in, or channel to respond in?
   which_trigger: Which trigger would you like? (type a number)
   available_triggers: |
     **Available auto-responder triggers:**
-  prompt_channel_id: Which channel should this trigger {mode} in? (channel id)
+  prompt_channel_add_listen: Which channel should I add to this trigger's listen channels?
+  prompt_channel_add_response: What channel should I respond in?
+  prompt_channel_add_log: Where should I log events for this trigger?
+  prompt_channel_add_ignore: Tell me a channel to ignore
+  prompt_channel_add_mod: What channel should I send "mod" response types in?
+  prompt_channel_remove_listen: |
+    I'm listening in these channels:
+    {channel_list}
+    Which should I remove?
+  prompt_channel_remove_response: |
+    Remove a response channel?
+    {channel_list}
+  prompt_channel_remove_log: |
+    I'm logging this trigger in these channels:
+    {channel_list}
+    Which should I remove?
+  prompt_channel_remove_ignore: |
+    I'm ignoring this trigger in these channels:
+    {channel_list}
+    Which should I remove?
   prompt_response: How would you like me to respond?
   prompt_trigger: What should the new trigger be?
-  prompt_chance: How often should I respond? (floating point percent e.g. `35.15`)
+  prompt_chance: What should the probability of a response be? (percentage with up to 2 decimals e.g. `35.15`)
   on_or_off: |
     `{subject}` on or off?
   expect_integer: I was hoping for one of these values ```{keys}```
@@ -371,10 +392,10 @@ krill:
   available_bylines: |
     **Available krill bylines:**
   duplicate_byline: That one already exists. Try something different.
+  add_byline: New krill byline added ```{byline}```
   confirm_byline: |
     Does this look right?
     {formatted_byline}
-  add_byline: New krill byline added ```{byline}```
   remove_byline: Byline {number} removed.
   not_changing_byline: Ok, no changes. Gimme a call when you make up your mind.
 react_monitor:

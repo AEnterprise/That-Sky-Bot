@@ -1,10 +1,16 @@
+import json
+
 import tortoise.exceptions
+from aerich import Command
+from contrib.pydantic import pydantic_model_creator
 from tortoise.expressions import Q
 from tortoise.query_utils import Prefetch
 
 from utils import Database
 from utils.Database import *
 from tortoise import Tortoise, run_async
+
+from utils.Logging import TCol
 
 
 async def run():
@@ -411,12 +417,12 @@ async def run():
     try:
         await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.log)
         await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.mod)
-        await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.reply)
-        await AutoResponse.create(autoresponder=my_ar2, response="a message", type=AutoResponseType.reply)
-        await AutoResponse.create(autoresponder=my_ar2, response="another message", type=AutoResponseType.reply)
-        await AutoResponse.create(autoresponder=my_ar2, response="more message", type=AutoResponseType.reply)
-        await AutoResponse.create(autoresponder=my_ar2, response="yes message", type=AutoResponseType.reply)
-        await AutoResponse.create(autoresponder=my_ar2, response="no message", type=AutoResponseType.reply)
+        await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.public)
+        await AutoResponse.create(autoresponder=my_ar2, response="a message", type=AutoResponseType.public)
+        await AutoResponse.create(autoresponder=my_ar2, response="another message", type=AutoResponseType.public)
+        await AutoResponse.create(autoresponder=my_ar2, response="more message", type=AutoResponseType.public)
+        await AutoResponse.create(autoresponder=my_ar2, response="yes message", type=AutoResponseType.public)
+        await AutoResponse.create(autoresponder=my_ar2, response="no message", type=AutoResponseType.public)
         await AutoResponse.create(autoresponder=my_ar3, response="a message", type=AutoResponseType.log)
     except tortoise.exceptions.IntegrityError as e:
         print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
@@ -731,8 +737,8 @@ async def run():
             for rel in response_channels:
                 print(f"\t\t{rel.channelid}, {rel.type}")
             log_responses = await row.responses.filter(type=AutoResponseType.log)
-            mod_responses = await row.responses.filter(type=AutoResponseType.log)
-            reply_responses = await row.responses.filter(type=AutoResponseType.reply)
+            mod_responses = await row.responses.filter(type=AutoResponseType.mod)
+            reply_responses = await row.responses.filter(type=AutoResponseType.public)
             print(f"\tlog responses:")
             for rel in log_responses:
                 print(f"\t\t{rel.response}, {rel.type}")
@@ -761,7 +767,7 @@ async def run():
             Prefetch('channels', queryset=AutoResponderChannel.filter(type=AutoResponderChannelType.listen), to_attr='listen_channels'),
             Prefetch('channels', queryset=AutoResponderChannel.filter(type=AutoResponderChannelType.ignore), to_attr='ignored_channels'),
             Prefetch('responses', queryset=AutoResponse.filter(type=AutoResponseType.log).limit(1), to_attr='log_responses'),
-            Prefetch('responses', queryset=AutoResponse.filter(type=AutoResponseType.reply), to_attr='reply_responses'),
+            Prefetch('responses', queryset=AutoResponse.filter(type=AutoResponseType.public), to_attr='reply_responses'),
             Prefetch('responses', queryset=AutoResponse.filter(type=AutoResponseType.mod).limit(1), to_attr='mod_responses')
         ):
             print('--------')
@@ -772,13 +778,22 @@ async def run():
             print(f"log responses: {[r.response for r in row.log_responses]}")
             print(f"reply_responses: {[r.response for r in row.reply_responses]}")
             print(f"mod responses: {[r.response for r in row.mod_responses]}")
+        rows = await AutoResponder.all()
+        ar_pydantic = pydantic_model_creator(AutoResponder)
+        p = await ar_pydantic.from_tortoise_orm(rows[0])
+        print("ARs:", p.model_dump_json(indent=4))
     except Exception as e:
         print("relations failed:")
         print(e)
         raise e
 
+    count = await AutoResponse.filter(autoresponder=my_ar2).count()
+    print(f'\n********************\nAR response count: {count}')
+    if count == int(count):
+        print("\tCount int comparison succeeds!")
+
     print('\n********************\nAR global ignore channel')
-    ar_ignored = await AutoResponderChannel.filter(guild=my_guild, autoresponder=None)
+    ar_ignored = await AutoResponderChannel.filter(autoresponder=None)
     print(ar_ignored)
 
     # delete without fetching

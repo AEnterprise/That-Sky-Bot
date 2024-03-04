@@ -13,7 +13,7 @@ from discord.ext.commands import Bot
 import discord
 import sentry_sdk
 from aiohttp import ClientOSError, ServerDisconnectedError
-from discord import Embed, Colour, ConnectionClosed, NotFound
+from discord import Embed, Colour, ConnectionClosed, NotFound, Guild, Role
 from discord.abc import PrivateChannel
 
 from utils import Logging, Configuration
@@ -29,6 +29,8 @@ URL_MATCHER = re.compile(r'((?:https?://)[a-z0-9]+(?:[-._][a-z0-9]+)*\.[a-z]{2,5
 EMOJI_MATCHER = re.compile('<(a?):([^: \n]+):([0-9]+)>')
 NUMBER_MATCHER = re.compile(r"\d+")
 INVITE_MATCHER = re.compile(r"(?:https?://)?(?:www\.)?(?:discord(?:\.| |\[?\(?\"?'?dot'?\"?\)?\]?)?(?:gg|io|me|li)|discord(?:app)?\.com/invite)/+((?:(?!https?)[\w\d-])+)", flags=re.IGNORECASE)
+
+DISCORD_INDENT = "**\u200b \u200b **"
 
 welcome_channel = "welcome_channel"
 rules_channel = "rules_channel"
@@ -86,6 +88,26 @@ def permission_official(member_id, permission_name):
         return getattr(official_member.guild_permissions, permission_name)
     except Exception:
         return False
+
+
+def id_list_to_roles(guild: Guild, id_list: list[int]):
+    """Convert a list of integer role IDs to a list of validated roles for the requested guild.
+
+    Parameters
+    ----------
+    guild
+    id_list
+
+    Returns
+    -------
+    role_list: list[Role]
+    """
+    output = []
+    for role_id in id_list:
+        my_role = guild.get_role(role_id)
+        if my_role:
+            output.append(my_role)
+    return output
 
 
 def get_channel_description(bot, channel_id):
@@ -245,7 +267,9 @@ user_cache = OrderedDict()
 
 
 async def get_user(uid, fetch=True):
-    UserClass = namedtuple("UserClass", "name id discriminator bot avatar created_at is_avatar_animated mention")
+    UserClass = namedtuple(
+        "UserClass",
+        "name id discriminator bot avatar created_at is_avatar_animated mention")
     user = BOT.get_user(uid)
     if user is None:
         if uid in known_invalid_users:

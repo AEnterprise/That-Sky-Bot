@@ -72,17 +72,21 @@ class LangConfig(BaseCog):
 
         guild_config_row.defaultlocale = locale
         await guild_config_row.save()
+        await Lang.load_local_overrides()
         await ctx.send(Lang.get_locale_string('lang/default_set', ctx, locale=locale, server_name=ctx.guild.name))
 
     # Set channel-specific locale
     @commands.guild_only()
     @lang.command(aliases=["channel", "channel_locale"])
     async def set_channel_locale(self, ctx, channel_id: int = 0, locale: str = '' ):
-        """
-        Set Locale for a specific channel
+        """Set Locale for a specific channel
 
-        locale: Locale string, or one of ["*", "x", "none", "unset", "off"] to unset
-        channel_id: ID for channel to set, or do not provide ID and invocation channel will be used.
+        Parameters
+        ----------
+        locale
+            A locale string, or one of ["*", "x", "none", "unset", "off"] to unset
+        channel_id
+            ID for channel to set, or do not provide ID and invocation channel will be used.
         """
         # TODO: add ALL_LOCALES as channel option
         # use input channel, or if input is 0, use channel from command context
@@ -119,6 +123,7 @@ class LangConfig(BaseCog):
                 await ctx.send(Lang.get_locale_string('lang/channel_not_unset', ctx, channelid=channel_id))
             else:
                 await localization_row.delete()
+                await Lang.load_local_overrides()
                 await ctx.send(Lang.get_locale_string('lang/channel_unset', ctx, old_value=old_value))
             return
 
@@ -132,6 +137,7 @@ class LangConfig(BaseCog):
 
         localization_row.locale = locale
         await localization_row.save()
+        await Lang.load_local_overrides()
         await ctx.send(Lang.get_locale_string('lang/channel_set', ctx, channelid=channel_id, locale=locale))
 
     # get translation string get_translation(locale, key, **kwargs)

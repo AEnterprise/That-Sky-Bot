@@ -139,7 +139,7 @@ async def ask_text(
             await clean_dialog()
             await channel.send(
                 # TODO: remove "bug" from lang string. send report cancel language from Bugs.py exception handler
-                Lang.get_locale_string("questions/error_reaction_timeout", locale,
+                Lang.get_locale_string("questions/error_reply_timeout", locale,
                                        error_emoji=Emoji.get_emoji("WARNING"),
                                        timeout=timeout_format(timeout))
             )

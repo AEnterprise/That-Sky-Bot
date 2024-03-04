@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+from enum import IntEnum
 
 from tortoise import Tortoise
 from tortoise.models import Model
 from tortoise.fields import \
-    BooleanField, BigIntField, IntField, SmallIntField, CharField, ForeignKeyField, OneToOneField, ReverseRelation
+    BooleanField, BigIntField, IntField, SmallIntField, CharField, ForeignKeyField, OneToOneField, ReverseRelation, \
+    IntEnumField
 
 from utils import tortoise_settings, Logging
 from utils.tortoise_settings import app_name as app
@@ -69,25 +71,27 @@ class ArtChannel(AbstractBaseModel, DeprecatedServerIdMixIn):
 
 
 class Attachments(AbstractBaseModel):
-    url = CharField(max_length=255)
+    url = CharField(max_length=1024)
     report = ForeignKeyField(f'{app}.BugReport', related_name='attachments', index=True)
 
     def __str__(self):
         return self.url
 
     class Meta:
-        unique_together = ('report', 'url')
         table = 'attachments'
 
 
 class AutoResponder(AbstractBaseModel, DeprecatedServerIdMixIn):
     trigger = CharField(max_length=300)
-    response = CharField(max_length=2000)
+    response = CharField(max_length=2000, null=True, default='')
     flags = SmallIntField(default=0)
     chance = SmallIntField(default=10000)
     responsechannelid = BigIntField(default=0)
     listenchannelid = BigIntField(default=0)
     logchannelid = BigIntField(default=0)
+
+    channels: ReverseRelation["AutoResponderChannel"]
+    responses: ReverseRelation["AutoResponse"]
 
     def __str__(self):
         return self.trigger
@@ -95,6 +99,46 @@ class AutoResponder(AbstractBaseModel, DeprecatedServerIdMixIn):
     class Meta:
         unique_together = ('trigger', 'serverid')
         table = 'autoresponder'
+
+
+class AutoResponderChannelType(IntEnum):
+    ignore = 0
+    response = 1
+    listen = 2
+    log = 3
+    mod = 4
+
+
+class AutoResponseType(IntEnum):
+    public = 1
+    mod = 2
+    log = 3
+
+
+class AutoResponderChannel(AbstractBaseModel):
+    autoresponder = ForeignKeyField(f'{app}.AutoResponder',
+                                    related_name='channels',
+                                    index=True,
+                                    null=True,
+                                    default=None)
+    channelid = BigIntField()
+    type = IntEnumField(AutoResponderChannelType)
+
+    class Meta:
+        table = 'autoresponderchannel'
+
+
+class AutoResponse(AbstractBaseModel):
+    autoresponder = ForeignKeyField(f'{app}.AutoResponder', related_name='responses', index=True)
+    response = CharField(max_length=2000)
+    active = BooleanField(default=True)
+    type = IntEnumField(AutoResponseType)
+
+    def __str__(self):
+        return str(self.response)
+
+    class Meta:
+        table = 'autoresponse'
 
 
 class BotAdmin(AbstractBaseModel):
@@ -246,6 +290,7 @@ class Guild(AbstractBaseModel):
     defaultlocale = CharField(max_length=10, default="en_US")
 
     admin_roles: ReverseRelation["AdminRole"]
+    autoresponders: ReverseRelation["AutoResponder"]
     bug_channels: ReverseRelation["BugReportingChannel"]
     locales: ReverseRelation["Localization"]
     mod_roles: ReverseRelation["ModRole"]

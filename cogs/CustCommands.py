@@ -226,7 +226,7 @@ class CustCommands(BaseCog):
             for trigger in self.commands[message.guild.id]:
                 cleaned_message = await Utils.clean(message.content.lower())
                 if cleaned_message == prefix+trigger or (cleaned_message.startswith(trigger, len(prefix)) and cleaned_message[len(prefix+trigger)] == " "):
-                    command = self.commands[message.guild.id][trigger]
+                    command: CustomCommand = self.commands[message.guild.id][trigger]
                     reference = message if command.reply else None
                     command_content = command.response.replace("@", "@\u200b").format(author=message.author.mention)
                     if command.deletetrigger:

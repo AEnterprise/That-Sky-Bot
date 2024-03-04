@@ -1,9 +1,10 @@
 import asyncio
 import importlib
-import inspect
 import os
 
 from discord.ext import commands
+from discord.ext.commands import ExtensionNotLoaded, ExtensionFailed, ExtensionNotFound, NoEntryPointError, \
+    ExtensionAlreadyLoaded
 
 from cogs.BaseCog import BaseCog
 from utils import Logging, Emoji, Reloader, Utils, Configuration, Lang
@@ -53,7 +54,21 @@ class Reload(BaseCog):
         cog: The name of the cog to reload
         """
         if cog in self.bot.cogs:
-            await self.bot.reload_extension(f"cogs.{cog}")
+            try:
+                await self.bot.reload_extension(f"cogs.{cog}")
+            except ExtensionNotLoaded:
+                await ctx.send(f'**{cog}** did not load.')
+                return
+            except ExtensionFailed:
+                await ctx.send(f'**{cog}** failed while loading.')
+                return
+            except NoEntryPointError:
+                await ctx.send(f'**{cog}** has no setup method.')
+                return
+            except ExtensionNotFound:
+                await ctx.send(f'**{cog}** not found.')
+                return
+
             await ctx.send(f'**{cog}** has been reloaded.')
             await Logging.bot_log(f'**{cog}** has been reloaded by {ctx.author.name}.')
         else:
@@ -83,7 +98,24 @@ class Reload(BaseCog):
         cog: Name of the cog to load
         """
         if os.path.isfile(f"cogs/{cog}.py"):
-            await self.bot.load_extension(f"cogs.{cog}")
+            try:
+                await self.bot.load_extension(f"cogs.{cog}")
+            except ExtensionNotLoaded:
+                await ctx.send(f'**{cog}** did not load.')
+                return
+            except ExtensionFailed:
+                await ctx.send(f'**{cog}** failed while loading.')
+                return
+            except NoEntryPointError:
+                await ctx.send(f'**{cog}** has no setup method.')
+                return
+            except ExtensionNotFound:
+                await ctx.send(f'**{cog}** not found.')
+                return
+            except ExtensionAlreadyLoaded:
+                await ctx.send(f'**{cog}** is already loaded.')
+                return
+
             if cog not in Configuration.MASTER_CONFIG["cogs"]:
                 Configuration.MASTER_CONFIG["cogs"].append(cog)
                 Configuration.save()

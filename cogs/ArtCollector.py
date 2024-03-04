@@ -281,7 +281,7 @@ class ArtCollector(BaseCog):
             if user_is_bot or not has_permission:
                 return
 
-            message = await my_channel.fetch_message(m_id)
+            message = my_channel.get_partial_message(m_id)
             if str(my_emoji) == str(Emoji.get_emoji("NO")):
                 # delete message
                 await message.delete()

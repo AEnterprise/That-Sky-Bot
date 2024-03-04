@@ -291,14 +291,23 @@ class DropBox(BaseCog):
                             pass
                     if clean_tasks:
                         await asyncio.gather(*clean_tasks)
-                except (CancelledError, asyncio.TimeoutError, discord.DiscordServerError, NotFound, RuntimeError) as e:
+                except (CancelledError,
+                        asyncio.TimeoutError,
+                        discord.DiscordServerError,
+                        NotFound,
+                        RuntimeError):
                     # I think these are safe to ignore...
+                    pass
+                except AttributeError as e:
+                    # likely that channel is None because of client reconnect or other session-related transient issue
+                    # this doesn't seem to persist, and is rare outside test server, so log and continue.
+                    Logging.info(f"Dropbox clean AttributeError: ")
                     pass
                 except aiohttp.ClientOSError:
                     await self.bot.guild_log(guild.id, f"Dropbox client error. Probably safe to ignore, but check "
                                                        f"your dropbox channels to make sure they are clean.")
                     continue
-                except RuntimeError as e:
+                except RuntimeError:
                     await self.bot.guild_log(guild.id, f"Dropbox error for guild `{guild.name}`. What's broken?")
                     # fall through and report
                 except Exception as e:

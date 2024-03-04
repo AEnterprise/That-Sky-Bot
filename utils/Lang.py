@@ -23,6 +23,8 @@ async def load_local_overrides():
     global GUILD_LOCALES, CHANNEL_LOCALES
     guild_ids = [guild.id for guild in Utils.BOT.guilds]
     guild_rows = await Guild.filter(serverid__in=guild_ids)
+    for row in guild_rows:
+        await row.fetch_related()
     channel_locales = await Localization.all()
     GUILD_LOCALES = {row.serverid: row.defaultlocale for row in guild_rows}
     CHANNEL_LOCALES = {row.channelid: row.locale for row in channel_locales}

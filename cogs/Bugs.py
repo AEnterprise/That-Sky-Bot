@@ -36,6 +36,7 @@ class Bugs(BaseCog):
 
     def __init__(self, bot):
         super().__init__(bot)
+        self.ready_task = None
         self.bug_messages = set()
         self.in_progress = dict()
         self.sweeps = dict()
@@ -60,7 +61,7 @@ class Bugs(BaseCog):
             # TODO: save bug progress
             # TODO: resume report when restarting? inform user report was interrupted by restart, re-ask last question
         Logging.info(f"\t{TCol.cWarning}Cancel active bug runners...{TCol.cEnd}")
-        for task in [*self.bug_runner_tasks, *self.bug_tasks]:
+        for task in [*self.bug_runner_tasks, *self.bug_tasks, self.ready_task]:
             task.cancel()
         try:
             Logging.info(f"\t{TCol.cWarning}Wait for bug tasks to end...{TCol.cEnd}")
@@ -86,7 +87,7 @@ class Bugs(BaseCog):
         # this count is only good for reports waiting to start
         # TODO: how to count number of workers that are working?
         # m.reports_in_progress.set_function(self.bug_report_queue.qsize)
-        asyncio.create_task(self.after_ready())
+        self.ready_task = asyncio.create_task(self.after_ready())
         Logging.info(f"\t{self.qualified_name}::cog_load complete")
 
     async def after_ready(self):
@@ -109,7 +110,7 @@ class Bugs(BaseCog):
             if shutdown_id is not None and channel is not None:
                 Configuration.del_persistent_var(shutdown_key)
                 try:
-                    message = await channel.fetch_message(shutdown_id)
+                    message = channel.get_partial_message(shutdown_id)
                     await message.delete()
                 except (NotFound, HTTPException):
                     pass
@@ -204,18 +205,18 @@ class Bugs(BaseCog):
 
                 if bug_info_id is not None:
                     try:
-                        message = await channel.fetch_message(bug_info_id)
+                        info_message = channel.get_partial_message(bug_info_id)
                     except (NotFound, HTTPException):
                         pass
                     else:
-                        if message.id in self.bug_messages:
-                            self.bug_messages.remove(message.id)
-                        await message.delete()
+                        if info_message.id in self.bug_messages:
+                            self.bug_messages.remove(info_message.id)
+                        await info_message.delete()
 
-                bugemoji = Emoji.get_emoji('BUG')
-                message = await channel.send(Lang.get_locale_string("bugs/bug_info", ctx, bug_emoji=bugemoji))
+                bug_emoji = Emoji.get_emoji('BUG')
+                message = await channel.send(Lang.get_locale_string("bugs/bug_info", ctx, bug_emoji=bug_emoji))
                 self.bug_messages.add(message.id)
-                await message.add_reaction(bugemoji)
+                await message.add_reaction(bug_emoji)
                 Configuration.set_persistent_var(f"{channel.guild.id}_{channel.id}_bug_message", message.id)
                 Logging.info(f"Bug report message sent in channel #{channel.name} ({channel.id})")
                 await last_message.delete()
@@ -998,12 +999,12 @@ class Bugs(BaseCog):
             else:
                 return
 
-        except Forbidden as ex:
+        except Forbidden:
             m.bot_cannot_dm_member.inc()
             await trigger_channel.send(
                 Lang.get_locale_string("bugs/dm_unable", ctx, user=user.mention),
                 delete_after=30)
-        except asyncio.TimeoutError as ex:
+        except asyncio.TimeoutError:
             m.report_incomplete_count.inc()
             await channel.send(Lang.get_locale_string("bugs/report_timeout", ctx))
             if active_question is not None:
@@ -1028,7 +1029,7 @@ class Bugs(BaseCog):
             user = self.bot.get_user(event.user_id)
             channel = self.bot.get_channel(event.channel_id)
             try:
-                message = await channel.fetch_message(event.message_id)
+                message = channel.get_partial_message(event.message_id)
                 await message.remove_reaction(event.emoji, user)
             except (NotFound, HTTPException) as e:
                 await self.bot.guild_log(

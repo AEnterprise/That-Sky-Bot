@@ -1,30 +1,64 @@
+import asyncio
+from dataclasses import dataclass
 import json
 import typing
 from datetime import datetime
+from uuid import uuid4
 
-from discord.ext.commands import Greedy
+from discord.app_commands import Group
 from tortoise.exceptions import OperationalError
 
+import utils.Utils
 from utils.Database import ReactWatch, WatchedEmoji, Guild, BugReportingChannel
 
 import discord
-from discord import NotFound, HTTPException, Forbidden, TextChannel
+from discord import NotFound, HTTPException, Forbidden, TextChannel, RawReactionActionEvent, app_commands, Interaction, \
+    Permissions, InteractionResponse
 from discord.ext import commands, tasks
 
 from cogs.BaseCog import BaseCog
 from utils import Utils, Configuration, Lang, Logging
+from utils.Configuration import get_persistent_var as get_pvar
+from utils.Configuration import set_persistent_var as set_pvar
+from utils.Configuration import del_persistent_var as del_pvar
+
+
+@dataclass(init=False)
+class VarKeys:
+    mutes: str = "react_mutes_"
+    rbu_interrupt: str = "react_watch_interrupt"
+    quick_react_time: str = "min_react_lifespan_"
+    spam_muting_time: str = "react_spam_muting_time_"
+    spam_muting_count: str = "react_spam_muting_count_"
+    spam_alerting_time: str = "react_spam_alerting_time_"
+    spam_alerting_count: str = "react_spam_alerting_count_"
+    excluded_channels: str = "react_watch_excluded_channels_"
+
+
+@dataclass(frozen=True)
+class ReactData:
+    time: float
+    event: RawReactionActionEvent
 
 
 class ReactMonitor(BaseCog):
+    # app command groups
+    clean_group = Group(
+        name='react',
+        description='Reaction controls',
+        default_permissions=Permissions(ban_members=True))
 
     def __init__(self, bot):
         super().__init__(bot)
-        self.excluded_channels_key = "react_watch_excluded_channels"
-        self.rbu_interrupt_key = "react_watch_interrupt"
-        self.rbu_running_key = "react_watch_running"
+        Logging.info(f"{self.qualified_name}::init")
+        self.excluded_channels = dict()
+        self.spam_alerting_count = dict()
         self.react_watch_servers = set()
-        self.min_react_lifespan = dict()
+        self.spam_alerting_time = dict()
+        self.spam_muting_count = dict()
         self.recent_reactions = dict()
+        self.quick_react_time = dict()
+        self.spam_muting_time = dict()
         self.react_removers = dict()
         self.mute_duration = dict()
         self.react_adds = dict()
@@ -32,19 +66,41 @@ class ReactMonitor(BaseCog):
         self.emoji = dict()
         self.mutes = dict()
         self.started = False
+        self.check = 0
 
-    async def on_ready(self):
+    async def cog_check(self, ctx):
+        return ctx.guild and (ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx))
+
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        asyncio.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
             await self.init_guild(guild.id)
         if not self.check_reacts.is_running():
             self.check_reacts.start()
         self.started = True
 
+    def cog_unload(self):
+        Logging.info("ReactMonitor::cog_unload")
+        self.check_reacts.cancel()
+
     async def init_guild(self, guild_id):
+        Logging.info(f"ReactMonitor::init_guild {guild_id}")
         watch, created = await ReactWatch.get_or_create(serverid=guild_id)
-        self.mutes[guild_id] = Configuration.get_persistent_var(f"react_mutes_{guild_id}", dict())
-        self.min_react_lifespan[guild_id] = Configuration.get_persistent_var(f"min_react_lifespan_{guild_id}", 0.5)
         self.mute_duration[guild_id] = watch.muteduration
+        self.mutes[guild_id] = get_pvar(f"{VarKeys.mutes}{guild_id}", dict())
+        self.spam_muting_time[guild_id] = get_pvar(f"{VarKeys.spam_muting_time}{guild_id}", 60)
+        self.quick_react_time[guild_id] = get_pvar(f"{VarKeys.quick_react_time}{guild_id}", 0.5)
+        self.spam_muting_count[guild_id] = get_pvar(f"{VarKeys.spam_muting_count}{guild_id}", 30)
+        self.spam_alerting_time[guild_id] = get_pvar(f"{VarKeys.spam_alerting_time}{guild_id}", 30)
+        self.spam_alerting_count[guild_id] = get_pvar(f"{VarKeys.spam_alerting_count}{guild_id}", 21)
+        self.excluded_channels[guild_id] = get_pvar(f"{VarKeys.excluded_channels}{guild_id}", [])
 
         # track react add/remove per guild
         self.recent_reactions[guild_id] = dict()
@@ -62,39 +118,41 @@ class ReactMonitor(BaseCog):
 
         self.guilds[guild_id], created = await Guild.get_or_create(serverid=guild_id)
 
-    def cog_unload(self):
-        self.check_reacts.cancel()
-
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
+        Logging.info("ReactMonitor::on_guild_join")
         await self.init_guild(guild.id)
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
-        Configuration.del_persistent_var(f"min_react_lifespan_{guild.id}", True)
-        Configuration.del_persistent_var(f"react_mutes_{guild.id}", True)
+        Logging.info("ReactMonitor::on_guild_remove")
+        del_pvar(f"{VarKeys.spam_alerting_count}{guild.id}", True)
+        del_pvar(f"{VarKeys.spam_alerting_time}{guild.id}", True)
+        del_pvar(f"{VarKeys.spam_muting_count}{guild.id}", True)
+        del_pvar(f"{VarKeys.quick_react_time}{guild.id}", True)
+        del_pvar(f"{VarKeys.spam_muting_time}{guild.id}", True)
+        del_pvar(f"{VarKeys.mutes}{guild.id}", True)
+        del_pvar(f"{VarKeys.excluded_channels}{guild.id}")
+
         del self.mutes[guild.id]
+        del self.react_adds[guild.id]
         del self.mute_duration[guild.id]
-        del self.min_react_lifespan[guild.id]
+        del self.quick_react_time[guild.id]
+        del self.spam_muting_time[guild.id]
+        del self.excluded_channels[guild.id]
+        del self.spam_alerting_time[guild.id]
+        del self.spam_alerting_count[guild.id]
+        del self.spam_muting_count[guild.id]
         del self.recent_reactions[guild.id]
         del self.react_removers[guild.id]
-        del self.react_adds[guild.id]
-        del self.emoji[guild.id]
         del self.guilds[guild.id]
+        del self.emoji[guild.id]
         if guild.id in self.react_watch_servers:
             await self.deactivate_react_watch(guild.id)
         watch = await ReactWatch.get(serverid=guild.id)
         for e in await watch.emoji:
             await e.delete()
         await watch.delete()
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, event):
-        await self.store_reaction_action(event)
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_remove(self, event):
-        await self.store_reaction_action(event)
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -108,12 +166,36 @@ class ReactMonitor(BaseCog):
                 try:
                     mute_role = guild.get_role(guild_config.mutedrole)
                     await member.add_roles(mute_role)
-                    log_msg = f"{Utils.get_member_log_name(member)} joined while still muted for banned reacts\n--- I **muted** them... **again**"
+                    log_msg = f"{Utils.get_member_log_name(member)} joined while still muted " \
+                              f"for banned reacts\n--- I **muted** them... **again**"
                     await self.bot.guild_log(guild.id, log_msg)
                 except Exception as e:
                     await Utils.handle_exception("reactmon failed to mute member", self.bot, e)
             else:
-                await self.bot.guild_log(guild.id, "**I can't re-mute for reacts because `!guildconfig` mute role is not set.")
+                await self.bot.guild_log(
+                    guild.id, "**I can't re-mute for reacts because `!guildconfig` mute role is not set.")
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, event: RawReactionActionEvent):
+        # TODO: queue emoji adds instead of processing via loop
+        await self.store_reaction_action(event)
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_remove(self, event: RawReactionActionEvent):
+        # TODO: queue emoji adds instead of processing via loop
+        await self.store_reaction_action(event)
+
+    async def store_reaction_action(self, event: RawReactionActionEvent):
+        if not self.started or await self.is_user_event_ignored(event):
+            return
+
+        # Track event in a dict, with event timestamp as key
+        now = datetime.now().timestamp()
+        my_id = uuid4()
+        try:
+            self.recent_reactions[event.guild_id][my_id] = ReactData(time=now, event=event)
+        except KeyError as e:
+            Logging.debug(f"React Monitory Key error: {json.dumps(e)}")
 
     async def activate_react_watch(self, guild_id):
         # store setting in db, and add to list of listening servers
@@ -129,13 +211,14 @@ class ReactMonitor(BaseCog):
         await watch.save()
         self.react_watch_servers.remove(guild_id)
 
-    async def is_user_event_ignored(self, event):
+    async def is_user_event_ignored(self, event: RawReactionActionEvent):
         ignored_channels = [row.channelid for row in await BugReportingChannel.all()]
         is_ignored_channel = event.channel_id in ignored_channels
         guild = self.bot.get_guild(event.guild_id)
         if not guild:
             # Don't listen to DMs
             return True
+        is_excluded_channel = event.channel_id in self.excluded_channels[event.guild_id]
         is_bot = event.user_id == self.bot.user.id
         member = guild.get_member(event.user_id)
 
@@ -147,22 +230,23 @@ class ReactMonitor(BaseCog):
         has_admin = False
 
         for role in member.roles:
+            # TODO: compare role to role, not role to int
             if role in Configuration.get_var("admin_roles", []):
                 has_admin = True
 
-        # ignore bot, ignore mod, ignore admin users and admin roles
-        if is_bot or is_mod or is_admin or has_admin or is_ignored_channel:
-            return True
-        return False
+        return is_bot or is_mod or is_admin or has_admin or is_ignored_channel or is_excluded_channel
 
-    async def cog_check(self, ctx):
-        return ctx.guild and (ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx))
+    async def get_react_lifespan(self, guild_id) -> int:
+        return max(self.quick_react_time[guild_id],
+                   self.spam_alerting_time[guild_id],
+                   self.spam_muting_time[guild_id])
 
     @tasks.loop(seconds=1.0)
     async def check_reacts(self):
         now = datetime.now().timestamp()
         for guild_id in self.recent_reactions:
             try:
+                # Check for expiring mutes
                 for user_id, mute_time in dict(self.mutes[guild_id]).items():
                     if float(mute_time) + float(self.mute_duration[guild_id]) < now:
                         try:
@@ -174,36 +258,70 @@ class ReactMonitor(BaseCog):
                                 if mute_role in member.roles:
                                     await member.remove_roles(mute_role)
                                 del self.mutes[guild_id][user_id]
-                        except Exception as e:
-                            log_channel = await self.bot.get_guild_log_channel(guild_id)
+                        except Exception:
                             del self.mutes[guild_id][user_id]
-                            await log_channel.send(f'Failed to unmute user ({user_id}) <@{user_id}>... did they leave the server?')
-                            # await Utils.handle_exception('react watch unmute failure', self.bot, e)
+                            await self.bot.guild_log(
+                                guild_id,
+                                f'Failed to unmute user ({user_id}) <@{user_id}>... did they leave the server?')
+
+                # creat list of reaction adds
                 rr = self.recent_reactions[guild_id]
-                adds = {t: e for (t, e) in rr.items() if e.event_type == "REACTION_ADD"}
+                data: ReactData
+                adds = {my_id: data for (my_id, data) in rr.items() if data.event.event_type == "REACTION_ADD"}
+                for my_id, data in adds.items():
+                    self.react_adds[guild_id][my_id] = data
 
-                # creat list of adds
-                for t, e in adds.items():
-                    self.react_adds[guild_id][t] = e
                 # cull out expired ones
-                for t, e in dict(self.react_adds[guild_id]).items():
-                    if t + self.min_react_lifespan[guild_id] < now:
+                for my_id, data in dict(self.react_adds[guild_id]).items():
+                    if data.time + (await self.get_react_lifespan(guild_id)) < now:
                         # add reaction is too far in the past. remove from the list
-                        del self.react_adds[guild_id][t]
+                        del self.react_adds[guild_id][my_id]
 
-                # loop over a copy of recent_reactions so we can remove items
-                for timestamp, event in dict(self.recent_reactions[guild_id]).items():
-                    # remove this one from the list
-                    del self.recent_reactions[guild_id][timestamp]
+                # process recent reactions and remove each from the list.
+                for my_id, data in dict(self.recent_reactions[guild_id]).items():
+                    # remove this one from the list, ignoring exceptions
+                    del self.recent_reactions[guild_id][my_id]
 
-                    p = getattr(self, 'process_'+event.event_type.lower())
-                    await p(timestamp, event)
+                    try:
+                        if data.event.event_type == "REACTION_ADD":
+                            await self.process_reaction_add(data)
+                        if data.event.event_type == "REACTION_REMOVE":
+                            await self.process_reaction_remove(data)
+                    except Exception as ex:
+                        await Utils.handle_exception('Failed to process a react', self.bot, ex)
 
             except Exception as ex:
                 await Utils.handle_exception('react watch loop error...', self.bot, ex)
 
+    @check_reacts.after_loop
+    async def check_reacts_done(self):
+        Logging.info("\t------ check reacts loop completed ------")
+
+    async def process_reaction_add(self, data: ReactData):
+        await self.spam_check(data)
+        await self.apply_reaction_add_rules(data)
+
+    async def spam_check(self, data: ReactData):
+        member = data.event.member
+        emoji_used = data.event.emoji
+        guild = self.bot.get_guild(data.event.guild_id)
+        channel = self.bot.get_channel(data.event.channel_id)
+
+        alerting = []
+        for my_id, data in self.react_adds[data.event.guild_id].items():
+            pass
+
+        # TODO: count reacts added within time interval
+        # TODO: alert after alerting threshold
+        # TODO: mute after muting threshold
+        return
+
+    # TODO: configure alerting threshold
+
+    # TODO: configure muting threshold
+
     @commands.group(name="reactmonitor",
-                    aliases=['reactmon', 'reactwatch', 'react', 'watcher'],
+                    aliases=['reactmon', 'reactwatch', 'watcher'],
                     invoke_without_command=True)
     @commands.guild_only()
     @commands.bot_has_permissions(embed_links=True)
@@ -221,10 +339,16 @@ class ReactMonitor(BaseCog):
         embed.add_field(name="Monitor React Removal", value="Yes" if watch.watchremoves else "No")
 
         if watch.watchremoves:
-            embed.add_field(name="Reaction minimum lifespan", value=f"{self.min_react_lifespan[ctx.guild.id]} seconds")
-
+            embed.add_field(name="Reaction minimum lifespan", value=f"{self.quick_react_time[ctx.guild.id]} seconds")
+        embed.add_field(name="React spam alerting time",
+                        value=utils.Utils.to_pretty_time(self.spam_alerting_time[ctx.guild.id]))
+        embed.add_field(name="React spam muting time",
+                        value=utils.Utils.to_pretty_time(self.spam_muting_time[ctx.guild.id]))
+        embed.add_field(name="React spam alerting count",
+                        value=utils.Utils.to_pretty_time(self.spam_alerting_count[ctx.guild.id]))
+        embed.add_field(name="React spam muting count",
+                        value=utils.Utils.to_pretty_time(self.spam_muting_count[ctx.guild.id]))
         embed.add_field(name="Mute duration", value=Utils.to_pretty_time(self.mute_duration[ctx.guild.id]))
-
         embed.add_field(name="__                                             __",
                         value="__                                             __",
                         inline=False)
@@ -251,7 +375,7 @@ class ReactMonitor(BaseCog):
 
     @react_monitor.command(aliases=["new", "edit", "update"])
     @commands.guild_only()
-    async def add(self, ctx: commands.Context, emoji, log: bool = True, remove: bool = False, mute: bool = False ):
+    async def add(self, ctx: commands.Context, emoji, log: bool = True, remove: bool = False, mute: bool = False):
         """
         Add an emoji to the reaction watchlist
 
@@ -274,123 +398,109 @@ class ReactMonitor(BaseCog):
         await ctx.send(f"`{emoji}` is now on the watch list with settings:\n"
                        f"{self.describe_emoji_watch_settings(self.emoji[ctx.guild.id][emoji])}")
 
-    @react_monitor.group(name="clean", invoke_without_command=True)
-    @commands.guild_only()
-    async def clean(self, ctx):
-        await ctx.send_help(ctx.command)
-
-    @clean.command(aliases=["user", "byuser"])
+    @clean_group.command(description="Clean recent reacts from a member")
+    @app_commands.describe(
+        target="The member whose reacts should be removed",
+        check_channel="Optional channel to check in. Leave blank to check all channels",
+        count="Number of messages to check per channel, starting from the most recent")
+    @app_commands.default_permissions(ban_members=True)
     @commands.guild_only()
     async def clean_by_user(
             self,
-            ctx: commands.Context,
+            interaction: Interaction,
             target: discord.User,
-            check_channels: Greedy[discord.TextChannel] = True,
+            check_channel: discord.TextChannel = None,
             count: int = 200):
-        Configuration.set_persistent_var(self.rbu_interrupt_key, False)
-        channels = ctx.guild.channels if check_channels is True else check_channels
-        if check_channels is True:
-            await ctx.send(f"Looking for reacts on the {count} most recent messages in all available channels")
-        else:
-            list_of_channels = "\n".join([c.mention for c in channels])
-            await ctx.send(f"Looking for reacts on the {count} most recent messages "
-                           f"in the following channels:\n{list_of_channels}")
-        excluded_channels = Configuration.get_persistent_var(self.excluded_channels_key, [])
+        set_pvar(VarKeys.rbu_interrupt, False)
+        r = typing.cast(InteractionResponse, interaction.response)
+        channels = interaction.guild.channels if check_channel is None else [check_channel]
+        await r.send_message(f"Looking for reacts on the {count} most recent messages in "
+                             "all available channels" if check_channel is None else check_channel.mention)
+        excluded_channels = self.excluded_channels[interaction.guild.id]
         for channel in channels:
             if isinstance(channel, TextChannel):
                 if channel.id in excluded_channels:
-                    await ctx.send(f"<#{channel.id}> skipped")
+                    await interaction.followup.send(f"<#{channel.id}> skipped")
                     continue
                 try:
                     i = 0
-                    await ctx.send(f"checking <#{channel.id}>...")
+                    await interaction.followup.send(f"checking <#{channel.id}>...")
                     async for message in channel.history(limit=count):
-                        interrupt = Configuration.get_persistent_var(self.rbu_interrupt_key, False)
+                        interrupt = get_pvar(VarKeys.rbu_interrupt, False)
                         if interrupt:
-                            Configuration.set_persistent_var(self.rbu_interrupt_key, False)
-                            await ctx.send(f"__remove react by user__ operation halted.")
+                            set_pvar(VarKeys.rbu_interrupt, False)
+                            await interaction.followup.send(f"__remove react by user__ operation halted.")
                             return
                         i += 1
                         for react in message.reactions:
                             async for user in react.users():
                                 if user.id == target.id:
                                     await message.clear_reaction(react.emoji)
-                                    await ctx.send(
+                                    await interaction.followup.send(
                                         f"__{i}.__ react {react.emoji} by userid ({user.id}) "
                                         f"removed from message {message.jump_url}")
                                     continue
                 except Forbidden:
-                    await ctx.send(f"I can't access message history in channel <#{channel.id}>")
-        await ctx.send("All done cleaning reacts")
+                    await interaction.followup.send(f"I can't access message history in channel <#{channel.id}>")
+        await interaction.followup.send("All done cleaning reacts")
 
-    @clean.command(aliases=["stop", "stopclean", "stop_clean"])
+    @clean_group.command(description="Abort any in-progress react cleanup process")
     @commands.guild_only()
-    async def stop_clean_by_user(self, ctx):
-        Configuration.set_persistent_var(self.rbu_interrupt_key, True)
-        await ctx.send(f"attempting to halt __remove react by user__ operation. If this doesn't work, KILL THE BOT!")
+    async def stop_clean_by_user(self, interaction: Interaction):
+        r = typing.cast(InteractionResponse, interaction.response)
+        set_pvar(VarKeys.rbu_interrupt, True)
+        await r.send_message(f"aborting __remove react by user__ operation. If this doesn't work, KILL THE BOT!")
 
-    @clean.command(aliases=["excludedchannels", "list_excluded", "listexcluded"])
+    @clean_group.command(description="List channels that are excluded from react spam cleanup")
     @commands.guild_only()
-    async def excluded_channels(self, ctx):
-        excluded_channels = Configuration.get_persistent_var(self.excluded_channels_key, [])
+    async def list_excluded(self, interaction: Interaction):
+        r = typing.cast(InteractionResponse, interaction.response)
+        Logging.info(self.excluded_channels)
+        excluded_channels = self.excluded_channels[interaction.guild_id]
         excluded_channels = [self.bot.get_channel(c).mention for c in excluded_channels]
         if not excluded_channels:
-            await ctx.send(f"No channels are excluded from react remove_by_user")
+            await r.send_message(f"No channels are excluded from react remove_by_user")
         else:
             channel_list = "\n".join(excluded_channels)
-            await ctx.send(f"Channels excluded from react remove_by_user:\n{channel_list}")
+            await r.send_message(f"Channels excluded from react remove_by_user:\n{channel_list}")
 
-    @clean.command(aliases=["exclude", "excludechannels", "exclude_channels"])
+    @clean_group.command(description="Exclude channel from react spam cleanup")
+    @app_commands.describe(channel="Channel to exclude")
     @commands.guild_only()
-    async def exclude_channel(self, ctx, channels: Greedy[discord.TextChannel]):
-        """
-        Exclude channel from checks for react spam
-        :param ctx:
-        :param channels:
-        :return:
-        """
-        excluded_channels = Configuration.get_persistent_var(self.excluded_channels_key, [])
+    async def exclude_channel(self, interaction: Interaction, channel: discord.TextChannel):
+        r = typing.cast(InteractionResponse, interaction.response)
+        excluded_channels = self.excluded_channels[interaction.guild_id]
         excluded_channels = set(excluded_channels)
-        added = []
-        for channel in channels:
-            if channel.id not in excluded_channels:
-                excluded_channels.add(channel.id)
-                added.append(channel.mention)
-        Configuration.set_persistent_var(self.excluded_channels_key, list(excluded_channels))
-        if not added:
-            await ctx.send(f"No channels added to exclusion list")
-        else:
-            await ctx.send(f"Added {' '.join(added)} to react spam channel exclusion list")
+        if channel.id not in excluded_channels:
+            excluded_channels.add(channel.id)
+            set_pvar(f"{VarKeys.excluded_channels}{interaction.guild_id}", list(excluded_channels))
+            self.excluded_channels[interaction.guild_id] = list(excluded_channels)
+            await r.send_message(f"Added {channel.mention} to react spam channel exclusion list")
+            return
+        await r.send_message(f"No channel added to exclusion list")
 
-    @clean.command(aliases=["unexclude", "unexcludechannels", "unexclude_channels"])
+    @clean_group.command(description="Remove channel from exclusion list for react spam cleanup")
+    @app_commands.describe(channel="Channels to remove from exclusion")
     @commands.guild_only()
-    async def unexclude_channel(self, ctx, channels: Greedy[discord.TextChannel]):
-        """
-        Exclude channel from checks for react spam
-        :param ctx:
-        :param channels:
-        :return:
-        """
-        excluded_channels = Configuration.get_persistent_var(self.excluded_channels_key, [])
+    async def unexclude_channel(self, interaction: Interaction, channel: discord.TextChannel):
+        r = typing.cast(InteractionResponse, interaction.response)
+        excluded_channels = self.excluded_channels[interaction.guild_id]
         excluded_channels = set(excluded_channels)
-        removed = []
-        for channel in channels:
-            if channel.id in excluded_channels:
-                excluded_channels.remove(channel.id)
-                removed.append(channel.mention)
-        Configuration.set_persistent_var(self.excluded_channels_key, list(excluded_channels))
-        if not removed:
-            await ctx.send(f"No channels removed from exclusion list")
-        else:
-            await ctx.send(f"Removed {' '.join(removed)} from react spam channel exclusion list")
+        if channel.id in excluded_channels:
+            excluded_channels.remove(channel.id)
+            set_pvar(f"{VarKeys.excluded_channels}{interaction.guild_id}", list(excluded_channels))
+            self.excluded_channels[interaction.guild_id] = list(excluded_channels)
+            await r.send_message(f"Removed {channel.mention} from react spam channel exclusion list")
+            return
+        await r.send_message(f"No channel removed from exclusion list")
 
     @react_monitor.command(aliases=["rem", "del", "delete"])
     @commands.guild_only()
     async def remove(self, ctx: commands.Context, emoji):
         """
         Remove an emoji from the watch list
-
-        emoji: The emoji to remove
+        :param ctx:
+        :param emoji: The emoji to remove
         """
         try:
             watch_row = await WatchedEmoji.get(watcher__serverid=ctx.guild.id, emoji=emoji)
@@ -434,8 +544,8 @@ class ReactMonitor(BaseCog):
 
         react_time: time in seconds, floating point e.g. 0.25
         """
-        self.min_react_lifespan[ctx.guild.id] = react_time
-        Configuration.set_persistent_var(f"min_react_lifespan_{ctx.guild.id}", react_time)
+        self.quick_react_time[ctx.guild.id] = react_time
+        set_pvar(f"{VarKeys.quick_react_time}{ctx.guild.id}", react_time)
         await ctx.send(f"Reactions that are removed before {react_time} seconds have passed will be flagged")
 
     @react_monitor.command(aliases=["list", "mutes"])
@@ -496,73 +606,64 @@ class ReactMonitor(BaseCog):
         t = Utils.to_pretty_time(mute_time)
         await ctx.send(f"Members will now be muted for {t} when they use restricted reacts")
 
-    async def store_reaction_action(self, event):
-        if not self.started or await self.is_user_event_ignored(event):
-            return
+    async def apply_reaction_add_rules(self, data: ReactData):
+        """
+        Enforce the rules on added reactions
+        :param data:
+        :return:
+        """
+        emoji_used = data.event.emoji
+        member = data.event.member
+        guild = self.bot.get_guild(data.event.guild_id)
+        channel = self.bot.get_channel(data.event.channel_id)
 
-        # Add event to dict for tracking fast removal of reactions
-        now = datetime.now().timestamp()
-        guild = self.bot.get_guild(event.guild_id)
-        try:
-            self.recent_reactions[guild.id][now] = event
-        except KeyError as e:
-            Logging.debug(f"React Monitory Key error: {json.dumps(e)}")
-
-    async def process_reaction_add(self, timestamp, event):
-        emoji_used = event.emoji
-        member = event.member
-        guild = self.bot.get_guild(event.guild_id)
-        channel = self.bot.get_channel(event.channel_id)
-        log_channel = await self.bot.get_guild_log_channel(event.guild_id)
-
-        # Act on log, remove, and mute:
-        e_db = None
-        if str(emoji_used) in self.emoji[event.guild_id]:
-            e_db = self.emoji[event.guild_id][str(emoji_used)]
-            if not e_db.log and not e_db.remove and not e_db.mute:
+        # Check emoji match list. log, remove, and mute:
+        if str(emoji_used) in self.emoji[guild.id]:
+            emoji_rule = self.emoji[guild.id][str(emoji_used)]
+            if not emoji_rule.log and not emoji_rule.remove and not emoji_rule.mute:
                 # No actions to take. Stop processing
                 return
-
-        if not e_db:
+        else:
             return
 
         # check mute/warn list for reaction_add - log to channel
         # for reaction_add, remove if threshold for quick-remove is passed
         try:
             # message fetch is API call. Only do it if needed
-            message = await channel.fetch_message(event.message_id)
-        except (NotFound, HTTPException) as e:
+            message = channel.get_partial_message(data.event.message_id)
+        except (NotFound, HTTPException):
             # Can't track reactions on a message I can't find
             # Happens for deleted messages. Safe to ignore.
-            # await Utils.handle_exception(f"Failed to get message {channel.id}/{event.message_id}", self, e)
+            # await Utils.handle_exception(f"Failed to get message {channel.id}/{data.event.message_id}", self, e)
             return
 
-        log_msg = f"{Utils.get_member_log_name(member)} used emoji "\
-                  f"[ {emoji_used} ] in #{channel.name}.\n"\
+        log_msg = f"{Utils.get_member_log_name(member)} used emoji " \
+                  f"[ {emoji_used} ] in #{channel.name}.\n" \
                   f"{message.jump_url}"
 
-        if e_db.remove:
+        if emoji_rule.remove:
             await message.clear_reaction(emoji_used)
             log_msg = f"{log_msg}\n--- I **removed** the reaction"
 
-        if e_db.mute:
+        if emoji_rule.mute:
             guild_config = await self.bot.get_guild_db_config(guild.id)
             if guild_config and guild_config.mutedrole:
                 try:
                     mute_role = guild.get_role(guild_config.mutedrole)
                     await member.add_roles(mute_role)
-                    self.mutes[guild.id][str(member.id)] = timestamp
-                    Configuration.set_persistent_var(f"react_mutes_{guild.id}", self.mutes[guild.id])
+                    self.mutes[guild.id][str(member.id)] = data.time
+                    set_pvar(f"{VarKeys.mutes}{guild.id}", self.mutes[guild.id])
                     log_msg = f"{log_msg}\n--- I **muted** them"
                 except Exception as e:
                     await Utils.handle_exception("reactmon failed to mute member", self.bot, e)
             else:
-                await self.bot.guild_log(event.guild_id, "**I can't mute for reacts because `!guildconfig` mute role is not set.")
+                await self.bot.guild_log(
+                    guild.id, "**I can't mute for reacts because `!guildconfig` mute role is not set.")
 
-        if (e_db.log or e_db.remove or e_db.mute) and log_channel:
-            await log_channel.send(log_msg)
+        if emoji_rule.log or emoji_rule.remove or emoji_rule.mute:
+            await self.bot.guild_log(guild.id, log_msg)
 
-    async def process_reaction_remove(self, timestamp, event):
+    async def process_reaction_remove(self, remove_data: ReactData):
         # TODO: Evaluate - count react removal and auto-mute for hitting threshold in given time?
         #  i.e. track react-remove-count per user over time. if count > x: mute/warn
 
@@ -570,39 +671,44 @@ class ReactMonitor(BaseCog):
         # now = datetime.now().timestamp()
         # self.react_removers[event.guild_id][event.user_id] = now
 
-        # listening setting only apples to quick-remove
+        event = remove_data.event
+        # don't bother with ignored channels
+        if event.message_id in self.excluded_channels[event.guild_id]:
+            return
+
+        # listening setting only applies to quick-remove
         server_is_listening = event.guild_id in self.react_watch_servers
         if not server_is_listening or await self.is_user_event_ignored(event):
             return
 
         # check recent reacts to see if they match the remove event
-        for t, add_event in self.react_adds[event.guild_id].items():
+        data: ReactData
+        for my_id, data in self.react_adds[event.guild_id].items():
             # Criteria for skipping an event in the list
-            not_message = add_event.message_id != event.message_id
-            not_user = add_event.user_id != event.user_id
+            not_message = data.event.message_id != event.message_id
+            not_user = data.event.user_id != event.user_id
 
-            age = timestamp - t
-            expired = 0 > age > self.min_react_lifespan[event.guild_id]
+            age = remove_data.time - data.time
+            # only look at reacts that are removed within quick-react expiration time
+            expired = 0 > age > self.quick_react_time[event.guild_id]
             if expired or not_message or not_user:
                 # message id and user id must match remove event, and must not be expired
                 continue
 
             # This user added a reaction that was removed within the warning time window
             guild = self.bot.get_guild(event.guild_id)
-            member = guild.get_member(event.user_id)
             emoji_used = str(event.emoji)
             channel = self.bot.get_channel(event.channel_id)
-            log_channel = await self.bot.get_guild_log_channel(guild.id)
+
             # ping log channel with detail
-            if log_channel:
-                content = f"{Utils.get_member_log_name(member)} " \
-                          f"quick-removed [ {emoji_used} ] react from a message in {channel.mention}"
-                try:
-                    message = await channel.fetch_message(event.message_id)
-                    content = f"{content}\n{message.jump_url}"
-                except (NotFound, HTTPException) as e:
-                    pass
-                await log_channel.send(content)
+            content = f"{Utils.get_member_log_name(guild.get_member(event.user_id))} " \
+                      f"quick-removed [ {emoji_used} ] react from a message in {channel.mention}"
+            try:
+                message = await channel.fetch_message(event.message_id)
+                content = f"{content}\n{message.jump_url}"
+            except (NotFound, HTTPException):
+                pass
+            await self.bot.guild_log(guild.id, content)
 
 
 async def setup(bot):

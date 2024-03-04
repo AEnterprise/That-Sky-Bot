@@ -15,6 +15,7 @@ questions:
   attachment_not_found: There were no files or links in that message. Try sending again
   approve_attachments: Final answer!
   error_reaction_timeout: "{error_emoji} You didn't react within {timeout}"
+  error_reply_timeout: "{error_emoji} You didn't reply within {timeout}"
 channel_config:
   info: Channel Config for {server_name}
   commands: |
@@ -207,12 +208,12 @@ autoresponder:
   added: Auto-responder for `{trigger}` has been added!
   removed: Auto-responder `{trigger}` has been removed.
   updated: Auto-responder `{trigger}` has been updated!
-  chanceset: Chance that `{trigger}` will trigger a response is now {chance}%
+  chance_set: Chance that `{trigger}` will trigger a response is now {chance}%
   override_confirmation: This auto-responder already exists, do you want to replace it with this new text?
   empty_reply: Empty response? Why bother with me at all. Just shout your triggers into the wind and you already get no response! (use remove if you want me to stop responding to a trigger)
   empty_trigger: Your trigger is empty... so... you want me to react to *literally nothing??*
-  channel_unset: Okay, I'll {mode} to `{trigger}` in the same channel it's matched in
-  channel_set: Okay, I'll {mode} to `{trigger}` in {channel}
+  channel_unset: Okay, I'll `{mode}` to `{trigger}` in the same channel it's matched in
+  channel_set: Okay, {channel}  will be used for `{channel_type}` when matching ```{trigger}```
   no_channel: No channel set.
   updating: Updating...
   not_updating: Keeping the old one.
@@ -221,9 +222,8 @@ autoresponder:
   which_flag: |
     Which flag do you want? (type a number)
     {options}
-  which_mode: Set channel to listen in, or channel to respond in?
   which_trigger: Which trigger would you like? (type a number)
-  prompt_channel_id: Which channel should this trigger {mode} in? (channel id)
+  prompt_channel_id: Which channel should I {mode} {to_from_as} {channel_type} channel{plural}?
   prompt_response: How would you like me to respond?
   prompt_trigger: What should the new trigger be?
   prompt_chance: How often should I respond? (floating point percent e.g. `35.15`)
