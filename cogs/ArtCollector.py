@@ -9,7 +9,7 @@ from utils import Lang, Utils, Emoji, Logging
 from utils.Database import ArtChannel
 
 from cogs.BaseCog import BaseCog
-from utils.Utils import CHANNEL_ID_MATCHER
+from utils.Constants import CHANNEL_ID_MATCHER
 
 
 class ArtCollector(BaseCog):
@@ -23,7 +23,7 @@ class ArtCollector(BaseCog):
         self.collection_channels = dict()
 
     async def cog_check(self, ctx):
-        return ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx)
+        return ctx.author.guild_permissions.ban_members or await Utils.permission_manage_bot(ctx)
 
     async def cog_load(self):
         Logging.info(f"\t{self.qualified_name}::cog_load")
@@ -188,7 +188,7 @@ class ArtCollector(BaseCog):
                 await ctx.send(f"{Emoji.get_chat_emoji('YES')} {channel_removed_str}")
             except Exception as e:
                 await ctx.send(Lang.get_locale_string('art/remove_channel_failed', ctx))
-                await Utils.handle_exception("Art collector remove exception", self.bot, e)
+                await Utils.handle_exception("Art collector remove exception", e)
         else:
             channel_not_found_str = Lang.get_locale_string(
                 'art/channel_not_found', ctx,
@@ -293,7 +293,7 @@ class ArtCollector(BaseCog):
             # couldn't find channel, message, member, or action
             return
         except Exception as e:
-            await Utils.handle_exception("art collector generic exception", self.bot, e)
+            await Utils.handle_exception("art collector generic exception", e)
             return
 
 

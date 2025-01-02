@@ -1,17 +1,16 @@
 import asyncio
+import io
 import re
 import typing
 from datetime import datetime
 
 import discord
-from discord.ext import commands, tasks
-import io
 import requests
+from discord.ext import commands
 from discord.ext.commands import MemberConverter
 
-import sky
 from cogs.BaseCog import BaseCog
-from utils import Configuration, Logging, Utils, Lang
+from utils import Logging, Utils, Lang
 
 
 class Welcomer(BaseCog):

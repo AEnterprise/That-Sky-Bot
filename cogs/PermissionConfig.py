@@ -1,13 +1,12 @@
 import asyncio
-import json
 
 import discord
 from discord.ext import commands
 
 from cogs.BaseCog import BaseCog
 from utils import Lang, Logging
-from utils.Database import Guild, BotAdmin
 from utils import Utils
+from utils.Database import Guild, BotAdmin
 from utils.Logging import TCol
 
 

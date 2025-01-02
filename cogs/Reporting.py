@@ -30,7 +30,8 @@ class Reporting(BaseCog):
             end: typing.Optional[int] = None,
             branch: typing.Optional[str] = "",
             platform: typing.Optional[str] = ""):
-        """Export bug reports starting from {start} to CSV file
+        """
+        Export bug reports starting from {start} to CSV file
         csv                      exports 100 most recent reports
         csv 15 20                exports reports with ids in the range 15-20
         csv -200                 exports the last 200 reports matching other criteria (max 1000)
@@ -38,7 +39,6 @@ class Reporting(BaseCog):
         csv {beta|stable} [android|ios|etc]
                                  exports reports for given branch and platform"""
         # TODO: start from date?
-        # TODO: migrate to async ORM like tortoise
 
         async def get_branch(a_branch):
             branches = {p.branch for p in await BugReportingPlatform.all()}
