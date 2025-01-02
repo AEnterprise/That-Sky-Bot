@@ -108,3 +108,5 @@ venv.bak/
 config.json
 logs
 persistent.json
+discord/
+backup/
