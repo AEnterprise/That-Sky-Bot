@@ -1,13 +1,20 @@
 import asyncio
 import importlib
 import os
+from itertools import islice
+from typing import List
 
+import discord
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import ExtensionNotLoaded, ExtensionFailed, ExtensionNotFound, NoEntryPointError, \
     ExtensionAlreadyLoaded
 
 from cogs.BaseCog import BaseCog
 from utils import Logging, Emoji, Reloader, Utils, Configuration, Lang
+from utils.Helper import Sender
+from utils.Logging import TCol
+from utils.Utils import check_is_owner, interaction_response
 
 
 class Reload(BaseCog):
@@ -16,7 +23,7 @@ class Reload(BaseCog):
         super().__init__(bot)
 
     async def cog_check(self, ctx):
-        return await self.bot.permission_manage_bot(ctx)
+        return await Utils.permission_manage_bot(ctx)
 
     async def cog_load(self):
         Logging.info(f"\t{self.qualified_name}::cog_load")
@@ -42,8 +49,68 @@ class Reload(BaseCog):
                 author = self.bot.get_user(author_id)
                 await message.edit(content=f"Restart complete {author.mention}")
             except Exception as e:
-                await Utils.handle_exception("Reload after_ready exception", self.bot, e)
+                await Utils.handle_exception("Reload after_ready exception", e)
                 pass
+
+    @app_commands.command(name="reload")
+    @app_commands.describe(module="The cog to reload")
+    @app_commands.check(check_is_owner)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_channels=True)
+    async def reload_cog(self, interaction: discord.Interaction, module: str):
+        """Reload the specified module"""
+        sender = Sender(interaction)
+        cog = module
+
+        await interaction_response(interaction).defer() # thinking...
+
+        if cog in self.bot.cogs:
+            complete = False
+            msg = ''
+
+            try:
+                Logging.info(f"trying to reload {cog}...")
+                Logging.info(f"\t{TCol.Warning.value}Shutting down{TCol.End.value} cog {TCol.Cyan.value}{cog}{TCol.End.value}")
+                if hasattr(cog, "shutdown"):
+                    await cog.shutdown()
+                await self.bot.reload_extension(f"cogs.{cog}")
+            except ExtensionNotLoaded:
+                msg = f"\t{cog} isn't loaded, can't reload."
+            except ExtensionFailed as e:
+                msg = f"\t**{cog}** failed while loading... {e}"
+            except NoEntryPointError:
+                msg = f"\t{cog} has no setup method."
+            except ExtensionNotFound:
+                msg = f"\t**{cog}** not found."
+            else:
+                complete = True
+                msg = f'**{cog}** was reloaded by {interaction.user.name}'
+                await Logging.bot_log(msg)
+            finally:
+                if complete:
+                    await sender.send(msg, ephemeral=True)
+        else:
+            await sender.send(f"{Emoji.get_chat_emoji('NO')} I can't find that cog.", ephemeral=True)
+
+    @reload_cog.autocomplete('module')
+    async def module_autocomplete(
+            self,
+            interaction: discord.Interaction,
+            current: str) -> List[app_commands.Choice[str]]:
+
+        if not check_is_owner(interaction):
+            return []
+
+        cogs = list(self.bot.cogs.keys())
+
+        # generator for all cog names:
+        all_matching_commands = (i for i in cogs if current.lower() in i.lower())
+        # islice to limit to 25 options (discord API limit)
+        some_cogs = list(islice(all_matching_commands, 25))
+        some_cogs.sort()
+        # convert matched list into list of choices
+        ret = [app_commands.Choice(name=c, value=c) for c in some_cogs]
+        return ret
 
     @commands.command()
     async def reload(self, ctx, *, cog: str):
@@ -55,22 +122,26 @@ class Reload(BaseCog):
         """
         if cog in self.bot.cogs:
             try:
+                Logging.info(f"trying to reload {cog}...")
+                Logging.info(f"\t{TCol.Warning.value}Shutting down{TCol.End.value} cog {TCol.Cyan.value}{cog}{TCol.End.value}")
+                if hasattr(cog, "shutdown"):
+                    await cog.shutdown()
                 await self.bot.reload_extension(f"cogs.{cog}")
             except ExtensionNotLoaded:
+                Logging.info(f"\t{cog} isn't loaded, can't reload...")
                 await ctx.send(f'**{cog}** did not load.')
-                return
-            except ExtensionFailed:
+            except ExtensionFailed as e:
+                Logging.info(f"\t{cog} failed while loading... {e}")
                 await ctx.send(f'**{cog}** failed while loading.')
-                return
             except NoEntryPointError:
+                Logging.info(f"\t{cog} has no setup method?...")
                 await ctx.send(f'**{cog}** has no setup method.')
-                return
             except ExtensionNotFound:
+                Logging.info(f"\t{cog} not found...")
                 await ctx.send(f'**{cog}** not found.')
-                return
-
-            await ctx.send(f'**{cog}** has been reloaded.')
-            await Logging.bot_log(f'**{cog}** has been reloaded by {ctx.author.name}.')
+            else:
+                await ctx.send(f'**{cog}** has been reloaded.')
+                await Logging.bot_log(f'**{cog}** has been reloaded by {ctx.author.name}.')
         else:
             await ctx.send(f"{Emoji.get_chat_emoji('NO')} I can't find that cog.")
 

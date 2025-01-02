@@ -118,7 +118,7 @@ def get_defaulted_locale(ctx: typing.Union[Context, Interaction, str]):
     return [locale]
 
 
-def get_locale_string(key, ctx='', **arg_dict):
+def get_locale_string(key, ctx='', **arg_dict) -> str:
     global LANG, locales_loaded
     locale = get_defaulted_locale(ctx)
 

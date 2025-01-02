@@ -86,9 +86,9 @@ def do_persistent_action(action: PersistentAction):
                 Logging.info(f'skipping delete for `{action.key}`')
                 return
             Logging.info(f'NOT skipping delete for `{action.key}`')
-            Utils.get_embed_and_log_exception(f"cannot delete nonexistent persistent var `{action.key}`", Utils.BOT, e)
+            Utils.get_embed_and_log_exception(f"cannot delete nonexistent persistent var `{action.key}`", e)
         except Exception as e:
-            Utils.get_embed_and_log_exception(f"---delete persistent var failed--- key `{action.key}`", Utils.BOT, e)
+            Utils.get_embed_and_log_exception(f"---delete persistent var failed--- key `{action.key}`", e)
     elif not action.delete and action.key:
         # SAVE/CREATE
         PERSISTENT[action.key] = action.value

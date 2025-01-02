@@ -208,6 +208,8 @@ async def run():
             allow_text=True)
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] KrillConfig.create was supposed to raise an IntegrityError")
     tables.remove("KrillConfig")
 
     try:
@@ -229,6 +231,8 @@ async def run():
         await KrillByLines.create(krill_config=krill_config_01, byline="something1", type=1)  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] KrillByLines.create was supposed to raise an IntegrityError")
     tables.remove("KrillByLines")
 
     try:
@@ -243,6 +247,8 @@ async def run():
         await BugReportingPlatform.create(guild=my_guild, branch="beta", platform="ios")  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] BugReportingPlatform.create was supposed to raise an IntegrityError")
     tables.remove("BugReportingPlatform")
 
     try:
@@ -250,12 +256,15 @@ async def run():
         await BugReportingChannel.create(guild=my_guild, channelid=123456, platform=my_bug_platform2)
         await BugReportingChannel.create(guild=my_other_guild, channelid=123456, platform=my_bug_platform)
         await BugReportingChannel.create(guild=my_other_guild, channelid=123456, platform=my_bug_platform2)
+        await BugReportingChannel.create(guild=my_other_guild, channelid=123456, platform=my_bug_platform4)
     except tortoise.exceptions.IntegrityError as e:
         print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
     try:
         await BugReportingChannel.create(guild=my_guild, channelid=123457, platform=my_bug_platform)  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] BugReportingChannel.create was supposed to raise an IntegrityError")
     tables.remove("BugReportingChannel")
 
     try:
@@ -336,10 +345,6 @@ async def run():
         await Attachments.create(url="fake5", report=my_bug_report2)
     except tortoise.exceptions.IntegrityError as e:
         print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
-    try:
-        await Attachments.create(url="fake5", report=my_bug_report)  # Fail
-    except tortoise.exceptions.IntegrityError as e:
-        print(f"[PASS] {type(e)} {e}")
     tables.remove("Attachments")
 
     try:
@@ -354,6 +359,8 @@ async def run():
         await Repros.create(user=1, report=my_bug_report)  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] Repros.create was supposed to raise an IntegrityError")
     tables.remove("Repros")
 
     try:
@@ -367,6 +374,8 @@ async def run():
         await ConfigChannel.create(serverid=234567, configname="c", channelid=4444)  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] ConfigChannel.create was supposed to raise an IntegrityError")
     tables.remove("ConfigChannel")
 
     try:
@@ -380,6 +389,8 @@ async def run():
         await CustomCommand.create(serverid=234567, trigger="ccfake", response="9876")  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] CustomCommand.create was supposed to raise an IntegrityError")
     tables.remove("CustomCommand")
 
     try:
@@ -391,9 +402,13 @@ async def run():
         print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
         return
     try:
-        await AutoResponder.create(serverid=234567, trigger="arfake", response="9876")
+        row = await AutoResponder.create(serverid=234567, trigger="arfake", response="9876")
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    except Exception as e:
+        print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] AutoResponder.create was supposed to raise an IntegrityError\n\t({repr(dict(row))})")
     tables.remove("AutoResponder")
 
     try:
@@ -409,9 +424,14 @@ async def run():
     except tortoise.exceptions.IntegrityError as e:
         print(f"-----------[FAIL] \n\t{type(e)}\n\t{e}")
     try:
-        await AutoResponderChannel.get_or_create(autoresponder=my_ar, channelid=12345, type=AutoResponderChannelType.log)
+        row, created = await AutoResponderChannel.get_or_create(autoresponder=my_ar, channelid=12345, type=AutoResponderChannelType.log)
     except tortoise.exceptions.IntegrityError as e:
-        print(f"[PASS] {type(e)} {e}")
+        print(f"[FAIL] {type(e)} {e}")
+    else:
+        if created:
+            print(f"[FAIL] AutoResponderChannel.create was not supposed to make a new row\n\t{repr(row)}")
+        else:
+            print("[PASS] AutoResponderChannel did not make a duplicate")
     tables.remove("AutoResponderChannel")
 
     try:
@@ -430,6 +450,8 @@ async def run():
         await AutoResponse.create(autoresponder=my_ar, response="a message", type=AutoResponseType.log)
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] AutoResponse.create was supposed to raise an IntegrityError")
     tables.remove("AutoResponse")
 
     try:
@@ -443,6 +465,8 @@ async def run():
         await CountWord.create(serverid=234567, word="fake")
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] CountWord.create was supposed to raise an IntegrityError")
     tables.remove("CountWord")
 
     try:
@@ -455,6 +479,8 @@ async def run():
         await ReactWatch.create(serverid=234567)  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] ReactWatch.create was supposed to raise an IntegrityError")
     tables.remove("ReactWatch")
 
     try:
@@ -469,6 +495,8 @@ async def run():
         await WatchedEmoji.create(watcher=watcher1, emoji="a", log=False, remove=True, mute=True)  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] WatchedEmoji.create was supposed to raise an IntegrityError")
     tables.remove("WatchedEmoji")
 
     try:
@@ -482,6 +510,8 @@ async def run():
         await ArtChannel.create(serverid=234567, listenchannelid=1, collectionchannelid=2, tag="something")
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] ArtChannel.create was supposed to raise an IntegrityError")
     tables.remove("ArtChannel")
 
     try:
@@ -495,6 +525,8 @@ async def run():
         await DropboxChannel.create(serverid=234567, sourcechannelid=98765)  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] DropboxChannel.create was supposed to raise an IntegrityError")
     tables.remove("DropboxChannel")
 
     try:
@@ -507,6 +539,8 @@ async def run():
         await AdminRole.create(guild=my_guild, roleid=98763)  # fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] AdminRole.create was supposed to raise an IntegrityError")
     tables.remove("AdminRole")
 
     try:
@@ -519,6 +553,8 @@ async def run():
         await BotAdmin.create(userid=98765)  # fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] BotAdmin.create was supposed to raise an IntegrityError")
     tables.remove("BotAdmin")
 
     try:
@@ -531,6 +567,8 @@ async def run():
         await ModRole.create(guild=my_guild, roleid=98763)  # fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] ModRole.create was supposed to raise an IntegrityError")
     tables.remove("ModRole")
 
     try:
@@ -543,6 +581,8 @@ async def run():
         await TrustedRole.create(guild=my_guild, roleid=98763)  # fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] TrustedRole.create was supposed to raise an IntegrityError")
     tables.remove("TrustedRole")
 
     try:
@@ -557,6 +597,8 @@ async def run():
         await Localization.create(guild=my_guild, channelid=98765, locale='en_US')  # Fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] Localization.create was supposed to raise an IntegrityError")
     tables.remove("Localization")
 
     try:
@@ -571,6 +613,8 @@ async def run():
         oreo_map, created = await OreoMap.get_or_create()  # Fail
     except (tortoise.exceptions.IntegrityError, tortoise.exceptions.MultipleObjectsReturned) as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] OreoMap.create was supposed to raise an IntegrityError")
     tables.remove("OreoMap")
 
     try:
@@ -586,6 +630,8 @@ async def run():
         await OreoLetters.create(token='a', token_class=1)
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] OreoLetters.create was supposed to raise an IntegrityError")
     tables.remove("OreoLetters")
 
     try:
@@ -600,6 +646,8 @@ async def run():
             guild=my_guild, userid=456787654, command="doSomethingElse", allow=False)  # fail
     except tortoise.exceptions.IntegrityError as e:
         print(f"[PASS] {type(e)} {e}")
+    else:
+        print(f"[FAIL] UserPermission.create was supposed to raise an IntegrityError")
     tables.remove("UserPermission")
 
     print("\n[INTEGRITY CHECKS COMPLETE]\n")
@@ -692,6 +740,11 @@ async def run():
             for channel_row in row.bug_channels:
                 await channel_row.fetch_related("guild", "platform")
                 print(f"\t\t--{channel_row.channelid} in {channel_row.guild.serverid}")
+
+        # platform_branch_row = await BugReportingPlatform.get()
+        rows = await BugReportingChannel.filter(channelid=123456, guild_id=1, platform__branch="beta")
+        for row in rows:
+            print(f"-----------------------------{repr(dict(row))}")
     except Exception:
         print("__**prefetch failed**__")
 

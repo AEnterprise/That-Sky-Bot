@@ -156,7 +156,7 @@ bugs:
 eden:
   reset: |
     The Eye of Eden resets once per week.
-    Next reset is on {date} at {time} (In {countdown})
+    Next reset is on {date} at {time} ({countdown})
   tz_help: I couldn't find a timezone called '{tz}.' Maybe you can find your timezone in this list <https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568>
   tz_mention: I'm not falling for that again
 nope: Something isn't right...
@@ -213,7 +213,7 @@ autoresponder:
   empty_reply: Empty response? Why bother with me at all. Just shout your triggers into the wind and you already get no response! (use remove if you want me to stop responding to a trigger)
   empty_trigger: Your trigger is empty... so... you want me to react to *literally nothing??*
   channel_unset: Okay, I'll `{mode}` to `{trigger}` in the same channel it's matched in
-  channel_set: Okay, {channel}  will be used for `{channel_type}` when matching ```{trigger}```
+  channel_set: Okay, {channel} will be used for `{channel_type}` when matching ```{trigger}```
   no_channel: No channel set.
   updating: Updating...
   not_updating: Keeping the old one.

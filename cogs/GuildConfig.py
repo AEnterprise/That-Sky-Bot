@@ -1,17 +1,30 @@
 import asyncio
 import re
+from typing import Literal
 
 import discord
-from discord import Role, TextChannel, Message, AllowedMentions, Forbidden, HTTPException
+from discord import (Role, TextChannel, AllowedMentions, Forbidden, HTTPException, NotFound, Interaction,
+                    app_commands, Permissions, InteractionResponded, DiscordException)
 from discord.ext import commands
+from discord.app_commands import Group
+from tortoise.exceptions import OperationalError
 
 from cogs.BaseCog import BaseCog
 from utils import Utils, Lang, Questions, Logging
+from utils.Constants import COLOR_LIME
 from utils.Database import Guild
+from utils.Utils import interaction_response
 
 
 class GuildConfig(BaseCog):
     power_task = dict()
+
+    # app command groups
+    guild_command = Group(
+        name='server',
+        description='Server Configuration',
+        guild_only=True,
+        default_permissions=Permissions(ban_members=True))
 
     def __init__(self, bot):
         super().__init__(bot)
@@ -28,11 +41,12 @@ class GuildConfig(BaseCog):
         Logging.info(f"\t{self.qualified_name}::after_ready")
         for guild in self.bot.guilds:
             try:
-                await self.init_guild(guild.id)
+                await GuildConfig.init_guild(guild.id)
             except Exception as e:
                 Logging.info(e)
 
-    async def init_guild(self, guild_id):
+    @staticmethod
+    async def init_guild(guild_id):
         row, created = await Guild.get_or_create(serverid=guild_id)
         Utils.GUILD_CONFIGS[guild_id] = row
         return row
@@ -43,16 +57,16 @@ class GuildConfig(BaseCog):
     async def cog_check(self, ctx):
         if ctx.guild is None:
             return False
-        return ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx)
+        return ctx.author.guild_permissions.ban_members or await Utils.permission_manage_bot(ctx)
 
     async def get_guild_config(self, guild_id):
         if guild_id in Utils.GUILD_CONFIGS:
             return Utils.GUILD_CONFIGS[guild_id]
-        return await self.init_guild(guild_id)
+        return await GuildConfig.init_guild(guild_id)
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
-        await self.init_guild(guild.id)
+        await GuildConfig.init_guild(guild.id)
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
@@ -73,75 +87,72 @@ class GuildConfig(BaseCog):
             guild_row.defaultlocale = ''
             await guild_row.save()
         except Exception as e:
-            await Utils.handle_exception(f"Failed to clear GuildConfig from server {guild.id}", self.bot, e)
+            await Utils.handle_exception(f"Failed to clear GuildConfig from server {guild.id}", e)
 
-    @commands.group(name="guildconfig",
-                    aliases=['guild', 'guildconf'],
-                    invoke_without_command=True)
-    @commands.guild_only()
-    @commands.bot_has_permissions(embed_links=True)
-    async def guild_config(self, ctx: commands.Context):
+    @guild_command.command(description="View server settings")
+    async def list_settings(self, interaction: Interaction):
         """
         List the guild settings
         """
-        my_guild = Utils.GUILD_CONFIGS[ctx.guild.id]
+        my_guild = Utils.GUILD_CONFIGS[interaction.guild.id]
         embed = discord.Embed(
-            timestamp=ctx.message.created_at,
-            color=Utils.COLOR_LIME,
-            title=Lang.get_locale_string("guild_config/info_title", ctx, server_name=ctx.guild.name))
+            timestamp=interaction.created_at,
+            color=COLOR_LIME,
+            title=Lang.get_locale_string("guild_config/info_title", interaction, server_name=interaction.guild.name))
 
         role_description = "none"
         if my_guild.memberrole:
-            role = ctx.guild.get_role(my_guild.memberrole)
-            role_description = f"{role.name} ({role.id})"
+            role = interaction.guild.get_role(my_guild.memberrole)
+            role_description = f"{role.mention} __{role.id}__" if role else f"~~{my_guild.memberrole}~~"
+
         embed.add_field(name="Member Role", value=role_description)
 
         role_description = "none"
         if my_guild.nonmemberrole:
-            role = ctx.guild.get_role(my_guild.nonmemberrole)
-            role_description = f"{role.name} ({role.id})"
+            role = interaction.guild.get_role(my_guild.nonmemberrole)
+            role_description = f"{role.mention} __{role.id}__" if role else f"~~{my_guild.nonmemberrole}~~"
         embed.add_field(name="Nonmember Role", value=role_description)
 
         role_description = "none"
         if my_guild.mutedrole:
-            role = ctx.guild.get_role(my_guild.mutedrole)
-            role_description = f"{role.name} ({role.id})"
+            role = interaction.guild.get_role(my_guild.mutedrole)
+            role_description = f"{role.mention} __{role.id}__" if role else f"~~{my_guild.mutedrole}~~"
         embed.add_field(name="Muted Role", value=role_description)
 
         role_description = "none"
         if my_guild.betarole:
-            role = ctx.guild.get_role(my_guild.betarole)
-            role_description = f"{role.name} ({role.id})"
+            role = interaction.guild.get_role(my_guild.betarole)
+            role_description = f"{role.mention} __{role.id}__" if role else f"~~{my_guild.betarole}~~"
         embed.add_field(name="Beta Role", value=role_description)
 
         channel_description = "none"
         if my_guild.welcomechannelid:
-            channel = ctx.guild.get_channel(my_guild.welcomechannelid)
-            channel_description = f"{channel.name} ({channel.id})"
+            channel = interaction.guild.get_channel(my_guild.welcomechannelid)
+            channel_description = f"{channel.mention} __{channel.id}__" if channel else f"~~{my_guild.welcomechannelid}~~"
         embed.add_field(name="Welcome Channel", value=channel_description)
 
         channel_description = "none"
         if my_guild.ruleschannelid:
-            channel = ctx.guild.get_channel(my_guild.ruleschannelid)
-            channel_description = f"{channel.name} ({channel.id})"
+            channel = interaction.guild.get_channel(my_guild.ruleschannelid)
+            channel_description = f"{channel.mention} __{channel.id}__" if channel else f"~~{my_guild.ruleschannelid}~~"
         embed.add_field(name="Rules Channel", value=channel_description)
 
         channel_description = "none"
         if my_guild.logchannelid:
-            channel = ctx.guild.get_channel(my_guild.logchannelid)
-            channel_description = f"{channel.name} ({channel.id})"
+            channel = interaction.guild.get_channel(my_guild.logchannelid)
+            channel_description = f"{channel.mention} __{channel.id}__" if channel else f"~~{my_guild.logchannelid}~~"
         embed.add_field(name="Log Channel", value=channel_description)
 
         channel_description = "none"
         if my_guild.entrychannelid:
-            channel = ctx.guild.get_channel(my_guild.entrychannelid)
-            channel_description = f"{channel.name} ({channel.id})"
+            channel = interaction.guild.get_channel(my_guild.entrychannelid)
+            channel_description = f"{channel.mention} __{channel.id}__" if channel else f"~~{my_guild.entrychannelid}~~"
         embed.add_field(name="Entry Channel", value=channel_description)
 
         channel_description = "none"
         if my_guild.maintenancechannelid:
-            channel = ctx.guild.get_channel(my_guild.maintenancechannelid)
-            channel_description = f"{channel.name} ({channel.id})"
+            channel = interaction.guild.get_channel(my_guild.maintenancechannelid)
+            channel_description = f"{channel.mention} __{channel.id}__" if channel else f"~~{my_guild.maintenancechannelid}~~"
         embed.add_field(name="Maintenance Channel", value=channel_description)
 
         rules_id = my_guild.rulesreactmessageid if my_guild.rulesreactmessageid else 'none'
@@ -150,143 +161,92 @@ class GuildConfig(BaseCog):
         locale = my_guild.defaultlocale if my_guild.defaultlocale else 'none'
         embed.add_field(name="Default Locale", value=locale)
 
-        await ctx.send(embed=embed)
+        await interaction_response(interaction).send_message(embed=embed, allowed_mentions=AllowedMentions.none())
 
-    async def set_field(self, ctx, field, val):
-        my_guild = Utils.GUILD_CONFIGS[ctx.guild.id]
+    async def set_field(self, interaction: Interaction, field, val):
+        my_guild = Utils.GUILD_CONFIGS[interaction.guild.id]
+        r = interaction_response(interaction)
         try:
             setattr(my_guild, field, val.id)
             await my_guild.save()
-            await self.init_guild(ctx.guild.id)
-            await ctx.send(f"Ok! `{field}` is now `{val.name} ({val.id})`")
-        except Exception as e:
-            await ctx.send(f"I failed to set `{field}` value to `{val.name} ({val.id})`")
+            await GuildConfig.init_guild(interaction.guild.id)
+            await r.send_message(f"Ok! `{field}` is now {val.mention} ({val.id})", allowed_mentions=AllowedMentions.none())
+        except (OperationalError, KeyError, HTTPException, TypeError, ValueError, InteractionResponded) as e:
+            log_msg = f"failed to set guild config `{field}` to {val.name}  ({val.id})"
+            Logging.info(log_msg, exc_info=True)
+            await Utils.handle_exception(log_msg, e)
+            await r.send_message(log_msg, allowed_mentions=AllowedMentions.none())
 
-    @guild_config.group(invoke_without_command=False)
-    @commands.guild_only()
-    async def set(self, ctx: commands.Context):
+    @guild_command.command(description="Modify server channel settings")
+    @app_commands.describe(
+        setting="The server channel configuration to change",
+        channel="The channel")
+    async def set_channel(
+            self,
+            interaction: Interaction,
+            setting: Literal[
+                'welcomechannelid',
+                'ruleschannelid',
+                'logchannelid',
+                'entrychannelid',
+                'maintenancechannelid'
+            ],
+            channel: TextChannel):
         """
-        Set one of the base settings for Skybot in this guild
+        Set one of the base channel settings for Skybot in this guild
         """
-        if not ctx.invoked_subcommand:
-            await ctx.send_help(ctx.command)
+        await self.set_field(interaction, setting, channel)
 
-    @set.command(aliases=['member', 'memberrole'])
-    @commands.guild_only()
-    async def member_role(self, ctx, role: Role):
+    @guild_command.command(description="Modify server role settings")
+    @app_commands.describe(
+        setting="The server role configuration to change",
+        role="The role")
+    async def set_role(
+            self,
+            interaction: Interaction,
+            setting: Literal[
+                'memberrole',
+                'nonmemberrole',
+                'mutedrole',
+                'betarole'
+            ],
+            role: Role):
         """
-        Set the member role
-
-        Used in cogs that read/set/unset the membership role in this server
-        role: Role name or role id
+        Set one of the base role settings for Skybot in this guild
         """
-        await self.set_field(ctx, 'memberrole', role)
+        await self.set_field(interaction, setting, role)
 
-    @set.command(aliases=['nonmember', 'nonmemberrole'])
-    @commands.guild_only()
-    async def nonmember_role(self, ctx, role: Role):
-        """
-        Set the nonmember role
-
-        Used in cogs that read/set/unset the nonmember role in this server
-        role: Role name or role id
-        """
-        await self.set_field(ctx, 'nonmemberrole', role)
-
-    @set.command(aliases=['muted', 'mutedrole'])
-    @commands.guild_only()
-    async def muted_role(self, ctx, role: Role):
-        """
-        Set the muted role
-
-        Used in cogs that read/set/unset the muted role in this server
-        role: Role name or role id
-        """
-        await self.set_field(ctx, 'mutedrole', role)
-
-    @set.command(aliases=['beta', 'betarole'])
-    @commands.guild_only()
-    async def beta_role(self, ctx, role: Role):
-        """
-        Set the beta role
-
-        Used in cogs that read/set/unset the beta role in this server
-        role: Role name or role id
-        """
-        await self.set_field(ctx, 'betarole', role)
-
-    @set.command(aliases=['welcome', 'welcomechannel'])
-    @commands.guild_only()
-    async def welcome_channel(self, ctx, chan: TextChannel):
-        """
-        Set the welcome channel
-
-        Used in cogs that read/set/unset the welcome channel in this server
-        role: Channel name or channel id
-        """
-        await self.set_field(ctx, 'welcomechannelid', chan)
-
-    @set.command(aliases=['rules', 'ruleschannel'])
-    @commands.guild_only()
-    async def rules_channel(self, ctx, chan: TextChannel):
-        """
-        Set the rules channel
-
-        Used in cogs that read/set/unset the rules channel in this server
-        role: Channel name or channel id
-        """
-        await self.set_field(ctx, 'ruleschannelid', chan)
-
-    @set.command(aliases=['log', 'logchannel'])
-    @commands.guild_only()
-    async def log_channel(self, ctx, chan: TextChannel):
-        """
-        Set the log channel
-
-        Used in cogs that read/set/unset the log channel in this server
-        role: Channel name or channel id
-        """
-        await self.set_field(ctx, 'logchannelid', chan)
-
-    @set.command(aliases=['entry', 'entrychannel'])
-    @commands.guild_only()
-    async def entry_channel(self, ctx, chan: TextChannel):
-        """
-        Set the entry channel
-
-        Used in cogs that read/set/unset the entry channel in this server
-        role: Channel name or channel id
-        """
-        await self.set_field(ctx, 'entrychannelid', chan)
-
-    @set.command(aliases=['maintenance', 'maintenancechannel'])
-    @commands.guild_only()
-    async def maintenance_channel(self, ctx, chan: TextChannel):
-        """
-        Set the maintenance channel
-
-        Used in cogs that read/set/unset the maintenance channel in this server
-        role: Channel name or channel id
-        """
-        await self.set_field(ctx, 'maintenancechannelid', chan)
-
-    @set.command(aliases=['rulesmessage', 'rulesreactmessage'])
-    @commands.guild_only()
-    async def rules_react_message(self, ctx, msg: Message):
+    @guild_command.command(description="Set react message ID")
+    @app_commands.describe(msg="The react message")
+    async def react_msg(
+            self,
+            interaction: Interaction,
+            msg: str):
         """
         Set the rules react message id
-
-        Used in cogs that read/set/unset the rulesreactmessageid in this server
-        role: chanelid-messageid, messageid, or url
         """
-        my_guild = Utils.GUILD_CONFIGS[ctx.guild.id]
+        my_guild = Utils.GUILD_CONFIGS[interaction.guild.id]
+        r = interaction_response(interaction)
+
+        my_id = int(msg)
+        my_channel = interaction.guild.get_channel(my_guild.ruleschannelid)
         try:
-            my_guild.rulesreactmessageid = msg.id
+            my_message = await my_channel.fetch_message(my_id)
+        except (NotFound, Forbidden, HTTPException):
+            await r.send_message(f"`{msg}` is not a message ID in the welcome channel")
+            return
+
+        try:
+            my_guild.rulesreactmessageid = my_id
             await my_guild.save()
-            await self.init_guild(ctx.guild.id)
-            await ctx.send(f"Ok! `rulesreactmessageid` is now `{msg.id}`")
+            await GuildConfig.init_guild(interaction.guild.id)
+            await r.send_message(f"Ok! `rulesreactmessageid` is now `{my_id}`")
+        except OperationalError:
+            await r.send_message(f"I failed to save `rulesreactmessageid` value `{my_id}` in db")
+        except DiscordException:
+            Logging.info(f"I failed to send confirmation: `rulesreactmessageid` value set to `{my_id}`")
         except Exception as e:
-            await ctx.send(f"I failed to set `rulesreactmessageid` value to `{msg.id}`")
+            Logging.info(f"unexpected exception {e} while setting `rulesreactmessageid` value to `{my_id}`")
 
     @commands.command(aliases=["stop"])
     @commands.guild_only()

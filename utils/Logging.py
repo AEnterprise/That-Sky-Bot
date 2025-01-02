@@ -1,8 +1,9 @@
+import functools
 import typing
-from dataclasses import dataclass
 import logging
 import os
 import sys
+from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
 
 from discord import TextChannel
@@ -13,22 +14,20 @@ LOGGER = logging.getLogger('thatskybot')
 DISCORD_LOGGER = logging.getLogger('discord')
 
 
-@dataclass
-class TCol:
-    cHeader = '\033[95m'
-    cOkBlue = '\033[94m'
-    cOkCyan = '\033[96m'
-    cOkGreen = '\033[92m'
-    cWarning = '\033[93m'
-    cFail = '\033[91m'
-    cEnd = '\033[0m'
-    cBold = '\033[1m'
-    cUnderline = '\033[4m'
+class TCol(Enum):
+    Header = '\033[95m'
+    Blue = '\033[94m'
+    Cyan = '\033[96m'
+    Green = '\033[92m'
+    Warning = '\033[93m'
+    Fail = '\033[91m'
+    End = '\033[0m'
+    Bold = '\033[1m'
+    Underline = '\033[4m'
 
 
 def init():
     LOGGER.setLevel(logging.DEBUG)
-
     DISCORD_LOGGER.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s')
@@ -54,17 +53,35 @@ async def bot_log(message=None, embed=None):
         return await BOT_LOG_CHANNEL.send(content=message, embed=embed)
 
 
-def debug(message):
-    LOGGER.debug(message)
+def log_format(subject:str, *styles:TCol)->str:
+    output = subject
+    for style in styles:
+        output = f"{style.value}{output}{TCol.End.value}"
+    return output
 
 
-def info(message):
-    LOGGER.info(message)
+def color_log(log_func):
+    @functools.wraps(log_func)
+    def color_wrapper(message:str, *styles:TCol, **kwargs):
+        log_func(log_format(message, *styles), **kwargs)
+    return color_wrapper
 
 
-def warn(message):
-    LOGGER.warning(message)
+@color_log
+def debug(message, **kwargs):
+    LOGGER.debug(message, **kwargs)
 
 
-def error(message):
-    LOGGER.error(message)
+@color_log
+def info(message, **kwargs):
+    LOGGER.info(message, **kwargs)
+
+
+@color_log
+def warn(message, **kwargs):
+    LOGGER.warning(message, **kwargs)
+
+
+@color_log
+def error(message, **kwargs):
+    LOGGER.error(message, **kwargs)

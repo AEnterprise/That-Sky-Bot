@@ -1,7 +1,6 @@
 import asyncio
 from dataclasses import dataclass
 import json
-import typing
 from datetime import datetime
 from uuid import uuid4
 
@@ -9,6 +8,7 @@ from discord.app_commands import Group
 from tortoise.exceptions import OperationalError
 
 import utils.Utils
+from utils.Constants import COLOR_LIME
 from utils.Database import ReactWatch, WatchedEmoji, Guild, BugReportingChannel
 
 import discord
@@ -21,6 +21,8 @@ from utils import Utils, Configuration, Lang, Logging
 from utils.Configuration import get_persistent_var as get_pvar
 from utils.Configuration import set_persistent_var as set_pvar
 from utils.Configuration import del_persistent_var as del_pvar
+from utils.Logging import log_format, TCol
+from utils.Utils import interaction_response
 
 
 @dataclass(init=False)
@@ -46,6 +48,7 @@ class ReactMonitor(BaseCog):
     clean_group = Group(
         name='react',
         description='Reaction controls',
+        guild_only=True,
         default_permissions=Permissions(ban_members=True))
 
     def __init__(self, bot):
@@ -69,7 +72,7 @@ class ReactMonitor(BaseCog):
         self.check = 0
 
     async def cog_check(self, ctx):
-        return ctx.guild and (ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx))
+        return ctx.guild and (ctx.author.guild_permissions.ban_members or await Utils.permission_manage_bot(ctx))
 
     async def cog_load(self):
         Logging.info(f"\t{self.qualified_name}::cog_load")
@@ -168,11 +171,11 @@ class ReactMonitor(BaseCog):
                     await member.add_roles(mute_role)
                     log_msg = f"{Utils.get_member_log_name(member)} joined while still muted " \
                               f"for banned reacts\n--- I **muted** them... **again**"
-                    await self.bot.guild_log(guild.id, log_msg)
+                    await Utils.guild_log(guild.id, log_msg)
                 except Exception as e:
-                    await Utils.handle_exception("reactmon failed to mute member", self.bot, e)
+                    await Utils.handle_exception("reactmon failed to mute member", e)
             else:
-                await self.bot.guild_log(
+                await Utils.guild_log(
                     guild.id, "**I can't re-mute for reacts because `!guildconfig` mute role is not set.")
 
     @commands.Cog.listener()
@@ -260,7 +263,7 @@ class ReactMonitor(BaseCog):
                                 del self.mutes[guild_id][user_id]
                         except Exception:
                             del self.mutes[guild_id][user_id]
-                            await self.bot.guild_log(
+                            await Utils.guild_log(
                                 guild_id,
                                 f'Failed to unmute user ({user_id}) <@{user_id}>... did they leave the server?')
 
@@ -288,14 +291,14 @@ class ReactMonitor(BaseCog):
                         if data.event.event_type == "REACTION_REMOVE":
                             await self.process_reaction_remove(data)
                     except Exception as ex:
-                        await Utils.handle_exception('Failed to process a react', self.bot, ex)
+                        await Utils.handle_exception('Failed to process a react', ex)
 
             except Exception as ex:
-                await Utils.handle_exception('react watch loop error...', self.bot, ex)
+                await Utils.handle_exception('react watch loop error...', ex)
 
     @check_reacts.after_loop
     async def check_reacts_done(self):
-        Logging.info("\t------ check reacts loop completed ------")
+        Logging.info("\t------ check reacts loop closed ------")
 
     async def process_reaction_add(self, data: ReactData):
         await self.spam_check(data)
@@ -333,7 +336,7 @@ class ReactMonitor(BaseCog):
         watch = await ReactWatch.get(serverid=ctx.guild.id)
         embed = discord.Embed(
             timestamp=ctx.message.created_at,
-            color=Utils.COLOR_LIME,
+            color=COLOR_LIME,
             title=Lang.get_locale_string("react_monitor/info_title", ctx, server_name=ctx.guild.name))
 
         embed.add_field(name="Monitor React Removal", value="Yes" if watch.watchremoves else "No")
@@ -358,7 +361,7 @@ class ReactMonitor(BaseCog):
                 if len(embed.fields) == max_fields:
                     await ctx.send(embed=embed)
                     embed = discord.Embed(
-                        color=Utils.COLOR_LIME,
+                        color=COLOR_LIME,
                         title="...")
                 embed.add_field(
                     name=f"{emoji.emoji}",
@@ -393,7 +396,7 @@ class ReactMonitor(BaseCog):
             await new_emoji.save()
             self.emoji[ctx.guild.id][emoji] = new_emoji
         except Exception as e:
-            await Utils.handle_exception("failed to add emoji to watch list", self.bot, e)
+            await Utils.handle_exception("failed to add emoji to watch list", e)
 
         await ctx.send(f"`{emoji}` is now on the watch list with settings:\n"
                        f"{self.describe_emoji_watch_settings(self.emoji[ctx.guild.id][emoji])}")
@@ -412,9 +415,8 @@ class ReactMonitor(BaseCog):
             check_channel: discord.TextChannel = None,
             count: int = 200):
         set_pvar(VarKeys.rbu_interrupt, False)
-        r = typing.cast(InteractionResponse, interaction.response)
         channels = interaction.guild.channels if check_channel is None else [check_channel]
-        await r.send_message(f"Looking for reacts on the {count} most recent messages in "
+        await interaction_response(interaction).send_message(f"Looking for reacts on the {count} most recent messages in "
                              "all available channels" if check_channel is None else check_channel.mention)
         excluded_channels = self.excluded_channels[interaction.guild.id]
         for channel in channels:
@@ -445,17 +447,16 @@ class ReactMonitor(BaseCog):
         await interaction.followup.send("All done cleaning reacts")
 
     @clean_group.command(description="Abort any in-progress react cleanup process")
-    @commands.guild_only()
     async def stop_clean_by_user(self, interaction: Interaction):
-        r = typing.cast(InteractionResponse, interaction.response)
         set_pvar(VarKeys.rbu_interrupt, True)
-        await r.send_message(f"aborting __remove react by user__ operation. If this doesn't work, KILL THE BOT!")
+        await interaction_response(interaction).send_message(f"aborting __remove react by user__ operation. If this doesn't work, KILL THE BOT!")
 
     @clean_group.command(description="List channels that are excluded from react spam cleanup")
-    @commands.guild_only()
     async def list_excluded(self, interaction: Interaction):
-        r = typing.cast(InteractionResponse, interaction.response)
-        Logging.info(self.excluded_channels)
+        r = interaction_response(interaction)
+        Logging.info(log_format("channels excluded for react spam cleanup: ",
+                       TCol.Underline,
+                       TCol.Blue) + repr(self.excluded_channels))
         excluded_channels = self.excluded_channels[interaction.guild_id]
         excluded_channels = [self.bot.get_channel(c).mention for c in excluded_channels]
         if not excluded_channels:
@@ -466,9 +467,8 @@ class ReactMonitor(BaseCog):
 
     @clean_group.command(description="Exclude channel from react spam cleanup")
     @app_commands.describe(channel="Channel to exclude")
-    @commands.guild_only()
     async def exclude_channel(self, interaction: Interaction, channel: discord.TextChannel):
-        r = typing.cast(InteractionResponse, interaction.response)
+        r = interaction_response(interaction)
         excluded_channels = self.excluded_channels[interaction.guild_id]
         excluded_channels = set(excluded_channels)
         if channel.id not in excluded_channels:
@@ -481,9 +481,8 @@ class ReactMonitor(BaseCog):
 
     @clean_group.command(description="Remove channel from exclusion list for react spam cleanup")
     @app_commands.describe(channel="Channels to remove from exclusion")
-    @commands.guild_only()
     async def unexclude_channel(self, interaction: Interaction, channel: discord.TextChannel):
-        r = typing.cast(InteractionResponse, interaction.response)
+        r = interaction_response(interaction)
         excluded_channels = self.excluded_channels[interaction.guild_id]
         excluded_channels = set(excluded_channels)
         if channel.id in excluded_channels:
@@ -510,7 +509,7 @@ class ReactMonitor(BaseCog):
         except OperationalError:
             await ctx.send(f"I couldn't find `{emoji}` on the emoji watch list, so I didn't remove it.")
         except Exception as e:
-            await Utils.handle_exception("react remove failed", self.bot, e)
+            await Utils.handle_exception("react remove failed", e)
 
     @react_monitor.command(aliases=['on'])
     @commands.guild_only()
@@ -634,7 +633,7 @@ class ReactMonitor(BaseCog):
         except (NotFound, HTTPException):
             # Can't track reactions on a message I can't find
             # Happens for deleted messages. Safe to ignore.
-            # await Utils.handle_exception(f"Failed to get message {channel.id}/{data.event.message_id}", self, e)
+            # await Utils.handle_exception(f"Failed to get message {channel.id}/{data.event.message_id}", e)
             return
 
         log_msg = f"{Utils.get_member_log_name(member)} used emoji " \
@@ -655,13 +654,13 @@ class ReactMonitor(BaseCog):
                     set_pvar(f"{VarKeys.mutes}{guild.id}", self.mutes[guild.id])
                     log_msg = f"{log_msg}\n--- I **muted** them"
                 except Exception as e:
-                    await Utils.handle_exception("reactmon failed to mute member", self.bot, e)
+                    await Utils.handle_exception("reactmon failed to mute member", e)
             else:
-                await self.bot.guild_log(
+                await Utils.guild_log(
                     guild.id, "**I can't mute for reacts because `!guildconfig` mute role is not set.")
 
         if emoji_rule.log or emoji_rule.remove or emoji_rule.mute:
-            await self.bot.guild_log(guild.id, log_msg)
+            await Utils.guild_log(guild.id, log_msg)
 
     async def process_reaction_remove(self, remove_data: ReactData):
         # TODO: Evaluate - count react removal and auto-mute for hitting threshold in given time?
@@ -708,7 +707,7 @@ class ReactMonitor(BaseCog):
                 content = f"{content}\n{message.jump_url}"
             except (NotFound, HTTPException):
                 pass
-            await self.bot.guild_log(guild.id, content)
+            await Utils.guild_log(guild.id, content)
 
 
 async def setup(bot):

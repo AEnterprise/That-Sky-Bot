@@ -13,8 +13,9 @@ from discord.utils import utcnow
 from discord import AllowedMentions, Message, TextChannel
 from discord.ext import commands, tasks
 from discord.errors import NotFound, HTTPException, Forbidden
-from tortoise.exceptions import MultipleObjectsReturned, DoesNotExist, IntegrityError, TransactionManagementError, \
-    OperationalError, IncompleteInstanceError
+
+from tortoise.exceptions import (MultipleObjectsReturned, DoesNotExist, IntegrityError,
+                                 TransactionManagementError, OperationalError, IncompleteInstanceError)
 from tortoise.query_utils import Prefetch
 
 from cogs.BaseCog import BaseCog
@@ -22,6 +23,7 @@ from utils.AutoResponderEvent import ArEvent, ArEventFactory
 from utils.AutoResponderFlags import ArFlags
 from utils.AutoResponderRule import ArRule
 from utils import Lang, Utils, Questions, Emoji, Configuration, Logging
+from utils.Logging import TCol
 from utils.Database import AutoResponder, AutoResponderChannel, AutoResponse, AutoResponderChannelType, AutoResponseType
 
 
@@ -148,7 +150,7 @@ class AutoResponders(BaseCog):
     async def cog_check(self, ctx: Context):
         if ctx.guild is None:
             return False
-        return ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx)
+        return ctx.author.guild_permissions.ban_members or await Utils.permission_manage_bot(ctx)
 
     async def reload_mod_actions(self, ctx: Optional[Context] = None):
         guilds = self.bot.guilds if ctx is None else [ctx.guild]
@@ -199,6 +201,13 @@ class AutoResponders(BaseCog):
 
     async def reload_triggers(self, ctx: Optional[Context] = None):
         guilds = self.bot.guilds if ctx is None else [ctx.guild]
+
+        ############################################################
+        # TODO: remove below section after db migration is confirmed
+        migrated = False
+        Logging.info(f"====== Migrating Autoresopnders ======", TCol.Underline, TCol.Header)
+        ############################################################
+
         for guild in guilds:
             # Empty the triggers
             self.triggers[guild.id] = dict()
@@ -243,6 +252,7 @@ class AutoResponders(BaseCog):
                 #
                 #
                 if ar_row.listenchannelid:
+                    Logging.info("migrate listen channel...")
                     # move to AutoResponderChannel
                     my_id = ar_row.listenchannelid
                     try:
@@ -253,11 +263,13 @@ class AutoResponders(BaseCog):
                         )
                         ar_row.listenchannelid = 0
                         await ar_row.save()
-                        Logging.info(f"migrated listen channel {my_id} for ar_id {ar_row.id}")
+                        Logging.info(f"migrated listen channel {my_id} for ar_id {ar_row.id}", TCol.Green)
+                        migrated = True
                     except (IntegrityError, TransactionManagementError):
-                        Logging.info(f"migration failed for ar listen channel {my_id} for ar_id {ar_row.id}")
+                        Logging.info(f"migration failed for ar listen channel {my_id} for ar_id {ar_row.id}", TCol.Fail)
 
                 if ar_row.responsechannelid:
+                    Logging.info("migrate response channel...")
                     # move to AutoResponderChannel
                     my_id = ar_row.responsechannelid
                     try:
@@ -268,11 +280,13 @@ class AutoResponders(BaseCog):
                         )
                         ar_row.responsechannelid = 0
                         await ar_row.save()
-                        Logging.info(f"migrated response channel {my_id} for ar_id {ar_row.id}")
+                        Logging.info(f"migrated response channel {my_id} for ar_id {ar_row.id}", TCol.Green)
+                        migrated = True
                     except (IntegrityError, TransactionManagementError):
-                        Logging.info(f"migration failed for ar response channel {my_id} for ar_id {ar_row.id}")
+                        Logging.info(f"migration failed for ar response channel {my_id} for ar_id {ar_row.id}", TCol.Fail)
 
                 if ar_row.logchannelid:
+                    Logging.info("migrate log channel...")
                     # move to AutoResponderChannel
                     my_id = ar_row.logchannelid
                     try:
@@ -283,9 +297,11 @@ class AutoResponders(BaseCog):
                         )
                         ar_row.logchannelid = 0
                         await ar_row.save()
-                        Logging.info(f"migrated log channel {my_id} for ar_id {ar_row.id}")
+                        Logging.info(f"migrated log channel {my_id} for ar_id {ar_row.id}", TCol.Green)
+                        migrated = True
                     except (IntegrityError, TransactionManagementError):
-                        Logging.info(f"migration failed for ar log channel {my_id} for ar_id {ar_row.id}")
+                        Logging.info(f"migration failed for ar log channel {my_id} for ar_id {ar_row.id}", TCol.Fail)
+
                 #
                 #
                 # TODO: remove above section after db migration is confirmed
@@ -297,6 +313,20 @@ class AutoResponders(BaseCog):
 
                 self.triggers[guild.id][ar_row.trigger] = await ArRule.from_db_row(ar_row)
         self.loaded = True
+
+        ############################################################
+        # TODO: remove below section after db migration is confirmed
+        #
+        if migrated:
+            Logging.info(f"====== Autoresopnder Migration Complete ======", TCol.Underline, TCol.Green)
+            Logging.info(f"Reloading:")
+            await self.reload_triggers(ctx)
+        else:
+            Logging.info(f"====== NO Autoresopnder Migration Done ======", TCol.Underline, TCol.Warning)
+        #
+        # TODO: remove above section after db migration is confirmed
+        ############################################################
+
 
     async def list_auto_responders(self, ctx: Context):
         """Create paginated list of autoresponders, using embeds
@@ -403,7 +433,7 @@ class AutoResponders(BaseCog):
                     await item.delete()
                     await asyncio.sleep(0.1)
                 except Exception as e:
-                    await Utils.handle_exception("Autoresponder choose_trigger clean_dialog exception", self.bot, e)
+                    await Utils.handle_exception("Autoresponder choose_trigger clean_dialog exception", e)
                     pass
 
         for trigger_string, data in AutoResponders.trigger_items_view(self.triggers[ctx.guild.id]):
@@ -748,7 +778,7 @@ class AutoResponders(BaseCog):
                                                        trigger=trigger, trigid=ar_row.id)
                 await ctx.send(f"{Emoji.get_chat_emoji('YES')} {added_message}")
             except (IntegrityError, OperationalError) as e:
-                await Utils.handle_exception("Create AR Failure", self.bot, e)
+                await Utils.handle_exception("Create AR Failure", e)
         else:
             await ctx.send(Lang.get_locale_string('autoresponder/not_updating', ctx))
             return
@@ -788,7 +818,7 @@ class AutoResponders(BaseCog):
         except DoesNotExist:
             await ctx.send(f"I didn't find a matching AutoResponder with trigger ```{trigger}```")
         except Exception as e:
-            await Utils.handle_exception("unknown AR Remove exception", self.bot, e)
+            await Utils.handle_exception("unknown AR Remove exception", e)
 
     # TODO: ar subscribe
     #  command to subscribe to matches
@@ -958,7 +988,7 @@ class AutoResponders(BaseCog):
                 await response.save()
                 await ctx.send(f"{Emoji.get_chat_emoji('YES')} Response updated!")
             except (IntegrityError, IncompleteInstanceError) as e:
-                await Utils.handle_exception("Failed response edit", self.bot, e)
+                await Utils.handle_exception("Failed response edit", e)
                 raise CommandError
         elif mode == ArCommandMode.Enable:
             if response.active:
@@ -1062,7 +1092,7 @@ class AutoResponders(BaseCog):
             ar_row.chance = chance
             await ar_row.save()
         except Exception as e:
-            await Utils.handle_exception("autoresponder set_chance exception", self.bot, e)
+            await Utils.handle_exception("autoresponder set_chance exception", e)
         await ctx.send(
             Lang.get_locale_string('autoresponder/chance_set', ctx,
                                    chance=chance/100,
@@ -1477,9 +1507,8 @@ class AutoResponders(BaseCog):
 
         prefix = Configuration.get_var("bot_prefix")
         ctx = await self.bot.get_context(message)
-        can_command = await self.cog_check(ctx)
-        command_context = message.content.startswith(prefix, 0) and can_command
-        is_mod = message.author.guild_permissions.mute_members or await self.bot.permission_manage_bot(ctx)
+        is_mod = message.author.guild_permissions.mute_members or await Utils.permission_manage_bot(ctx)
+        command_context = message.content.startswith(prefix, 0) and is_mod
 
         if guild.id not in self.triggers or command_context:
             # Guild not initialized or AR items empty? Ignore.
@@ -1491,7 +1520,7 @@ class AutoResponders(BaseCog):
                 # Instantiation of event handles initial behaviors.
                 my_event = await ArEventFactory.evaluate_event(self.bot, message, rule, is_mod)
             except Exception as e:
-                await Utils.handle_exception("AutoResponder Unknown Failure", self.bot, e)
+                await Utils.handle_exception("AutoResponder Unknown Failure", e)
                 continue
             if my_event is None:
                 # All actions for the matched rule completed, or no match. Evaluate the next rule
@@ -1599,7 +1628,7 @@ class AutoResponders(BaseCog):
             # couldn't find channel, message, member, or action
             return
         except Exception as e:
-            await Utils.handle_exception("auto-responder generic exception", self.bot, e)
+            await Utils.handle_exception("auto-responder generic exception", e)
             return
 
         if my_event:
@@ -1628,7 +1657,7 @@ class AutoResponders(BaseCog):
             edited_message = await my_pager.message.edit(content='\n'.join(my_ar_list[next_page]), embed=embed)
             my_pager.message = edited_message
         except Exception as e:
-            await Utils.handle_exception('AR Pager Failed', self.bot, e)
+            await Utils.handle_exception('AR Pager Failed', e)
         my_pager.active_page = page
 
     async def add_mod_action(self, ar_event):
@@ -1706,7 +1735,7 @@ class AutoResponders(BaseCog):
             if trigger_message is not None:
                 msg = await ar_event.get_formatted_response(AutoResponseType.public)
                 if not msg:
-                    await self.bot.guild_log(
+                    await Utils.guild_log(
                         ar_event.guild_id,
                         f"No responses configured for AR id {ar_event.autoresponder_id}")
                     return

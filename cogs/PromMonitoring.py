@@ -46,7 +46,7 @@ class PromMonitoring(BaseCog):
 
     async def create_site(self):
         port = Configuration.get_var('METRICS_PORT', 8080)
-        Logging.info(f"{TCol.cWarning}starting metrics server on port {port}{TCol.cEnd}")
+        Logging.info(f"starting metrics server on port {port}", TCol.Warning)
         metrics_app = web.Application()
         metrics_app.add_routes([web.get("/metrics", self.serve_metrics)])
 

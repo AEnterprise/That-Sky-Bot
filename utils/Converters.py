@@ -4,7 +4,7 @@ from discord.ext.commands import Converter, BadArgument, UserConverter
 from pytz import UnknownTimeZoneError
 
 from utils import Utils
-from utils.Utils import ID_MATCHER
+from utils.Constants import ID_MATCHER
 
 
 class Timezone(Converter):

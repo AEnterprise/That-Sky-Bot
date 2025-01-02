@@ -2,18 +2,23 @@ import asyncio
 import os
 import sys
 import time
-from concurrent.futures import CancelledError
+import traceback
+from asyncio import CancelledError
 from io import BytesIO
+from typing import Union
 from zipfile import ZipFile, ZIP_DEFLATED
 
 import discord
-from discord import Forbidden, File
+from discord import Forbidden, File, Interaction, app_commands, User
 from discord.ext import commands
 from discord.ext.commands import Context
 
 from cogs.BaseCog import BaseCog
 from utils import Lang, Questions, Utils, Logging
-from utils.Utils import MENTION_MATCHER, ID_MATCHER, NUMBER_MATCHER
+from utils.Constants import MENTION_MATCHER, ID_MATCHER, NUMBER_MATCHER
+from utils.Helper import ConfirmView, Sender
+from utils.Logging import TCol
+from utils.Utils import interaction_response
 
 try:
     pwd = os.path.dirname(os.path.realpath(__file__))
@@ -22,13 +27,17 @@ try:
         music_maker_path = os.path.normpath(os.path.join(pwd, '../../sky-python-music-sheet-maker'))
     if music_maker_path not in sys.path:
         sys.path.append(music_maker_path)
-    Logging.info(sys.path)
+    # Logging.info(sys.path)
     from src.skymusic.communicator import Communicator, QueriesExecutionAbort
     from src.skymusic.music_sheet_maker import MusicSheetMaker
     from src.skymusic.resources import Resources as skymusic_resources
 except ImportError as e:
-    Logging.info('*** IMPORT ERROR of one or several Music-Maker modules')
-    Logging.info(e)
+    Logging.info(f"*** IMPORT ERROR of one or several Music-Maker modules: {e}")
+
+
+async def can_admin(ctx: Context):
+    return (await Utils.permission_manage_bot(ctx) or
+            (ctx.guild and ctx.author.guild_permissions.manage_channels))
 
 
 class MusicCogPlayer:
@@ -75,7 +84,7 @@ class MusicCogPlayer:
                         answer_number = first_number + i
                     else:
                         answer_number = i
-                
+
                 query_dict = self.communicator.query_to_discord(q)
                 options = [Questions.Option("QUESTION_MARK", 'Help', handler=answer_number, args=(None, '?'))]
 
@@ -106,9 +115,9 @@ class MusicCogPlayer:
                         await Questions.ask(bot=self.cog.bot, channel=channel, author=user, text=question_text,
                                             options=options, show_embed=True, delete_after=True)
                         answer = answer_number
-                        
+
                     else:
-                        
+
                         answer = await Questions.ask_text(self.cog.bot, channel, user,
                                                           question_text, timeout=question_timeout,
                                                           validator=self.max_length(2000))
@@ -167,8 +176,30 @@ class MusicCogPlayer:
                 await channel.send(content="Yo, your music files got zipped",
                                    file=discord.File(stream, f"{song_title}_sheets.zip"))
             except Exception as e:
-                await Utils.handle_exception("bad zip!", self.cog.bot, e)
+                await Utils.handle_exception("bad zip!", e)
                 await channel.send("oops, zip file borked... contact the authorities!")
+
+
+async def convert_mention(name):
+    out_name = ''
+    m = MENTION_MATCHER.match(name)
+    n = NUMBER_MATCHER.match(name)
+    i = ID_MATCHER.match(name)
+    name_id = ''
+    if i:
+        name_id = i[1]
+    elif m:
+        name_id = m[2]
+    elif n:
+        name_id = n[0]
+    if name_id:
+        try:
+            my_user = Utils.BOT.get_user(int(name_id))
+            out_name = f"{my_user.display_name}"
+        except Exception:
+            pass
+    out_name = await Utils.clean(name) if not out_name else out_name
+    return out_name
 
 
 class Music(BaseCog):
@@ -182,13 +213,54 @@ class Music(BaseCog):
         m.songs_in_progress.set_function(lambda: len(self.in_progress))
         # TODO: create methods to update the bot metrics and in_progress, etc
 
+    async def cog_load(self):
+        Logging.info(f"\t{self.qualified_name}::cog_load")
+        # initialize anything that should happen before login
+        self.bot.loop.create_task(self.after_ready())
+        Logging.info(f"\t{self.qualified_name}::cog_load complete")
+
+    async def after_ready(self):
+        Logging.info(f"\t{self.qualified_name}::after_ready waiting...")
+        await self.bot.wait_until_ready()
+        Logging.info(f"\t{self.qualified_name}::after_ready")
+
+    async def shutdown(self):
+        """Called before cog_unload, only when shutting down bot. Custom to this bot."""
+        Logging.info(f"{self.qualified_name} shutdown", TCol.Underline, TCol.Header)
+
+    async def cog_unload(self):
+        Logging.info("\tCancel bug cleanup tasks...", TCol.Warning)
+        cancelling = set(self.in_progress.values())
+        Logging.info(cancelling)
+        i=1
+        for task in cancelling:
+            Logging.info(f"\tcanceling {i}...")
+            Logging.info(f"\t\ttask {i} is already done? {task.done()}")
+            Logging.info(f"\t\ttask {i} is canceled? {task.cancelled()}")
+            if not task.done() and not task.cancelled():
+                Logging.info(f"task {i} is not done or canceled")
+                Logging.info(task)
+                task.cancel()
+            i += 1
+        Logging.info("\tdone queuing cancels...", TCol.Warning)
+        if cancelling:
+            await asyncio.gather(*cancelling, return_exceptions=True)
+        Logging.info("\tdone canceling tasks...", TCol.Warning)
+        Logging.info(f"\t{self.qualified_name}::cog_unload")
+
+    async def init_guild(self, guild):
+        Logging.info(f"\t{self.qualified_name}::init_guild")
+
     async def delete_progress(self, user):
+        Logging.info(f"\t{self.qualified_name}::delete_progress")
         uid = user.id
         if uid in self.in_progress:
+            task = self.in_progress[uid]
             try:
-                self.in_progress[uid].cancel()
+                task.cancel()
             except Exception as e:
                 # ignore task cancel failures
+                Logging.info(e, exc_info=True)
                 pass
             del self.in_progress[uid]
             # if deleted task is recorded as active renderer, remove block
@@ -196,40 +268,53 @@ class Music(BaseCog):
                 self.is_rendering = None
                 self.bot.music_rendering = False
 
-    async def convert_mention(self, ctx, name):
-        out_name = ''
-        m = MENTION_MATCHER.match(name)
-        n = NUMBER_MATCHER.match(name)
-        i = ID_MATCHER.match(name)
-        name_id = ''
-        if i:
-            name_id = i[1]
-        elif m:
-            name_id = m[2]
-        elif n:
-            name_id = n[0]
-        if name_id:
-            try:
-                my_user = self.bot.get_user(int(name_id))
-                out_name = f"{my_user.display_name}#{my_user.discriminator}"
-            except Exception as e:
-                pass
-        out_name = await Utils.clean(name) if not out_name else out_name
-        return out_name
-
-    async def can_admin(ctx):
-        return await Utils.BOT.permission_manage_bot(ctx) or \
-            (ctx.guild and ctx.author.guild_permissions.manage_channels)
-
     @commands.command(aliases=['songs'])
     @commands.guild_only()
     @commands.check(can_admin)
     async def songs_in_progress(self, ctx):
         await ctx.send(f"There are  {len(self.in_progress)} songs in progress")
 
+    @app_commands.command(name='song')
+    async def app_song(self, interaction: Interaction):
+        """Create a Sky music sheet"""
+        user = interaction.user
+
+        success_msg = "A new music sheet is now in progress. Check your DMs!"
+        if user.id in self.in_progress:
+            # ask if user wants to start over
+            view = ConfirmView(interaction.user, timeout=10.0)
+            question = Lang.get_locale_string("music/start_over", interaction, user=user.mention)
+            await interaction_response(interaction).send_message(question, view=view, ephemeral=True)
+            await view.wait()
+
+            if view.value is None:
+                await interaction.followup.send("You didn't respond in time. Not starting over (head back to DMs!)", ephemeral=True)
+                return
+            elif view.value:
+                await interaction.followup.send(success_msg, ephemeral=True)
+                Logging.info(f"\t{self.qualified_name}::app_song deleting progress...")
+                await self.delete_progress(user)
+            else:
+                return  # in-progress song should not be reset. bail out
+        else:
+            await interaction_response(interaction).send_message(success_msg, ephemeral=True)
+
+        # Start a song creation
+        Logging.info(f"\t{self.qualified_name}::app_song starting new actual_transcribe_song", TCol.Header)
+        task = self.bot.loop.create_task(self.actual_transcribe_song(user, interaction))
+        self.in_progress[user.id] = task
+        try:
+            await task
+        except CancelledError:
+            Logging.info("app_song complete (canceled)")
+            pass
+        else:
+            Logging.info("app_song done, no exceptions")
+
     @commands.max_concurrency(10, wait=False)
     @commands.command(aliases=['song'])
     async def transcribe_song(self, ctx: Context):
+        Logging.info(f"\t{self.qualified_name}::transcribe_song", TCol.Header)
         if ctx.guild is not None:
             await ctx.message.delete()  # remove command to not flood chat (unless we are in a DM already)
             # TODO: ask for locale in all available languages
@@ -261,18 +346,22 @@ class Music(BaseCog):
             await self.delete_progress(user)
 
         # Start a song creation
+        Logging.info(f"\t{self.qualified_name}::transcribe_song starting new actual_transcribe_song", TCol.Header)
         task = self.bot.loop.create_task(self.actual_transcribe_song(user, ctx))
         self.in_progress[user.id] = task
         try:
             await task
-        except CancelledError as ex:
+        except CancelledError as e:
+            Logging.info("transcribe_song")
+            Logging.info(e, exc_info=True)
             pass
 
     # @commands.command(aliases=['song'])
-    async def actual_transcribe_song(self, user, ctx):
+    async def actual_transcribe_song(self, user: User, ctx: Union[Context, Interaction]):
         m = self.bot.metrics
         active_question = None
-        self_rendering = False
+        sender = Sender(ctx)
+        cancel = False
 
         try:
             # starts a dm
@@ -302,7 +391,7 @@ class Music(BaseCog):
             if not asking:
                 return
             else:
-                
+
                 active_question = 0
 
                 player = MusicCogPlayer(cog=self, locale=locale)
@@ -310,7 +399,7 @@ class Music(BaseCog):
 
                 # 1. Sets Song Parser
                 maker.set_song_parser()
-                
+
                 # 2. Displays instructions
                 i_instr, _ = maker.ask_instructions(recipient=player, execute=False)
                 answered = await player.async_execute_queries(channel, user, i_instr)
@@ -367,9 +456,9 @@ class Music(BaseCog):
                 # TODO: convert_mention only converts IDs here, maybe because mentions are escaped before here.
                 #  fix or maybe add an unescape or something
                 (title, artist, transcript) = [
-                    await self.convert_mention(ctx, q.get_reply().get_result()) for q in qs_meta
+                    await convert_mention(q.get_reply().get_result()) for q in qs_meta
                 ]
-                
+
                 # 9.b Sets song metadata
                 maker.set_song_metadata(recipient=player,
                                         meta=(title,
@@ -384,7 +473,7 @@ class Music(BaseCog):
                 #     answered = await player.async_execute_queries(channel, user, q_render)
                 #     render_modes = q_render.get_reply().get_result()
                 # active_question += 1
-                
+
                 # 11 Asks render mode
                 q_aspect, aspect_ratio = maker.ask_aspect_ratio(recipient=player, execute=False)
                 if aspect_ratio is None:
@@ -425,18 +514,34 @@ class Music(BaseCog):
                 await player.send_song_to_channel(channel, user, song_bundle, title)
                 m.songs_completed.inc()
                 active_question += 1
-        except Forbidden as ex:
-            await ctx.send(
+                cancel = True
+                Logging.info("actual_transcribe_song done. cancel delete tracker")
+        except Forbidden:
+            cancel = True
+            await sender.send(
                 Lang.get_locale_string("music/dm_unable", ctx, user=user.mention),
-                delete_after=30)
-        except asyncio.TimeoutError as ex:
+                delete_after=30, ephemeral=True)
+        except asyncio.TimeoutError:
+            cancel = True
             await channel.send(Lang.get_locale_string("music/song_timeout", ctx))
-        except CancelledError as ex:
-            raise ex
-        except Exception as ex:
-            await Utils.handle_exception("song creation", self.bot, ex)
+        except CancelledError as e:
+            Logging.info("actual_transcribe_song canceled")
+            await channel.send("`song creation canceled...`")
+            raise e
+        except Exception as e:
+            cancel = True
+            await Utils.handle_exception("song creation", e)
         finally:
-            self.bot.loop.create_task(self.delete_progress(user))
+            if cancel:
+                try:
+                    del_task = self.bot.loop.create_task(self.delete_progress(user))
+                    await del_task
+                except CancelledError:
+                    # all good
+                    pass
+                except KeyError:
+                    Logging.info(f"song for {user.id} already deleted")
+                    pass # can't cancel if it's already canceled
 
 
 """

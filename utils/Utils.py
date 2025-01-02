@@ -1,52 +1,50 @@
 import csv
+import inspect
 import json
 import math
-import re
 import time
 import traceback
 import typing
+import uuid
 from collections import OrderedDict, namedtuple
 from datetime import datetime
+from enum import EnumMeta, Enum
 from json import JSONDecodeError
-from discord.ext.commands import Bot
+from typing import Optional, Union
 
 import discord
 import sentry_sdk
 from aiohttp import ClientOSError, ServerDisconnectedError
-from discord import Embed, Colour, ConnectionClosed, NotFound, Guild, Role
+from discord import Embed, Colour, ConnectionClosed, NotFound, Guild, Role, HTTPException, AllowedMentions, \
+    InteractionResponse, Interaction
 from discord.abc import PrivateChannel
+from discord.ext.commands import Context
 
-from utils import Logging, Configuration
+from utils import Logging, Configuration, Utils
+from utils.Constants import *
+from utils.Logging import TCol
 
-BOT: typing.Optional[Bot] = None
+BOT = None
 GUILD_CONFIGS = dict()
-ID_MATCHER = re.compile("<@!?([0-9]+)[\\\\]*>")
-ROLE_ID_MATCHER = re.compile("<@&([0-9]+)>")
-CHANNEL_ID_MATCHER = re.compile("<#([0-9]+)>")
-MENTION_MATCHER = re.compile("(<@[\u200b]?[!&]?)(\\d+)[\\\\]*(>)")
-URL_MATCHER = re.compile(r'((?:https?://)[a-z0-9]+(?:[-._][a-z0-9]+)*\.[a-z]{2,5}(?::[0-9]{1,5})?(?:/[^ \n<>]*)?)',
-                         re.IGNORECASE)
-EMOJI_MATCHER = re.compile('<(a?):([^: \n]+):([0-9]+)>')
-NUMBER_MATCHER = re.compile(r"\d+")
-INVITE_MATCHER = re.compile(r"(?:https?://)?(?:www\.)?(?:discord(?:\.| |\[?\(?\"?'?dot'?\"?\)?\]?)?(?:gg|io|me|li)|discord(?:app)?\.com/invite)/+((?:(?!https?)[\w\d-])+)", flags=re.IGNORECASE)
-
-DISCORD_INDENT = "**\u200b \u200b **"
-
-welcome_channel = "welcome_channel"
-rules_channel = "rules_channel"
-log_channel = "log_channel"
-ro_art_channel = "ro_art_channel"
-entry_channel = "entry_channel"
-
-COLOR_LIME = 0xbefc03
+known_invalid_users = []
+user_cache = OrderedDict()
 
 
-def get_home_guild():
+class MetaEnum(EnumMeta):
+    def __contains__(cls, item):
+        try:
+            cls(item)
+        except ValueError:
+            return False
+        return True
+
+
+class BaseEnum(Enum, metaclass=MetaEnum):
+    pass
+
+
+def get_home_guild() -> Optional[Guild]:
     return BOT.get_guild(Configuration.get_var("guild_id"))
-
-
-def validate_channel_name(channel_name):
-    return channel_name in (welcome_channel, rules_channel, log_channel, ro_art_channel, entry_channel)
 
 
 def get_chanconf_description(bot, guild_id):
@@ -54,7 +52,7 @@ def get_chanconf_description(bot, guild_id):
     try:
         for name, id in bot.config_channels[guild_id].items():
             message += f"**{name}**: <#{id}>" + '\n'
-    except Exception as ex:
+    except KeyError:
         pass
     return message
 
@@ -67,15 +65,30 @@ async def fetch_last_message_by_channel(channel):
         return None
 
 
-async def permission_official_mute(ctx):
-    return permission_official(ctx.author.id, 'mute_members') or await BOT.permission_manage_bot(ctx)
+# Command checks
+async def permission_official_mute(ctx: Union[Context, Interaction]):
+    author = ctx.author if isinstance(ctx, Context) else ctx.user
+    return permission_official(author.id, 'mute_members') or await permission_manage_bot(ctx)
 
 
-async def permission_official_ban(ctx):
-    return permission_official(ctx.author.id, 'ban_members') or await BOT.permission_manage_bot(ctx)
+async def permission_official_ban(ctx: Union[Context, Interaction]):
+    author = ctx.author if isinstance(ctx, Context) else ctx.user
+    return permission_official(author.id, 'ban_members') or await permission_manage_bot(ctx)
 
 
-async def can_mod_official(ctx):
+#####################################
+# App command interaction checks
+#####################################
+
+def check_is_owner(interaction: Interaction):
+    return interaction.user.id == BOT.owner_id
+
+#####################################
+# END App command interaction checks
+#####################################
+
+
+async def can_mod_official(ctx: Union[Context, Interaction]):
     return await permission_official_ban(ctx)
 
 
@@ -90,7 +103,91 @@ def permission_official(member_id, permission_name):
         return False
 
 
-def id_list_to_roles(guild: Guild, id_list: list[int]):
+async def can_mod_guild(ctx: Union[Context, Interaction]):
+    author = ctx.author if isinstance(ctx, Context) else ctx.user
+
+    guild = get_home_guild()
+    member = guild.get_member(author.id)
+    return (member.guild_permissions.mute_members or
+            BOT is not None and
+            await permission_manage_bot(ctx))
+
+
+async def permission_manage_bot(ctx: Union[Context, Interaction]):
+    author = ctx.author if isinstance(ctx, Context) else ctx.user
+    guild = ctx.guild
+    cmd_name = ctx.command.name if ctx.command is not None else '[no command]'
+
+    is_admin = await BOT.member_is_admin(author.id)
+    if is_admin:
+        Logging.info(f"{inspect.stack()[1].filename}:{inspect.stack()[1].function} - admin granted to {author.name} for {cmd_name}", TCol.Green)
+        return True
+
+    if guild is not None:
+        """
+        Logging.info(
+            f"{inspect.stack()[1].filename}:{inspect.stack()[1].function}"
+            f" - checking permission by role. User: {author.name} Command: {cmd_name}",
+            TCol.Warning)
+        """
+        guild_row = await BOT.get_guild_db_config(guild.id)
+        config_role_ids = Configuration.get_var("admin_roles", [])  # roles saved in the config
+        db_admin_roles = await guild_row.admin_roles.filter()  # Roles saved in the db for this guild
+        db_admin_role_ids = [row.roleid for row in db_admin_roles]
+        admin_role_ids = db_admin_role_ids + config_role_ids
+        admin_roles = Utils.id_list_to_roles(guild, admin_role_ids)
+
+        for role in author.roles:
+            if role in admin_roles:
+                Logging.info(f"admin granted by {role.name} role to {author.name}", TCol.Green)
+                return True
+    return False
+
+
+async def can_help(ctx):
+    return ctx.author.guild_permissions.mute_members or await Utils.permission_manage_bot(ctx)
+
+
+async def get_guild_log_channel(guild_id):
+    # TODO: per cog override for logging channel?
+    return await get_guild_config_channel(guild_id, 'log')
+
+
+async def get_guild_rules_channel(guild_id):
+    return await get_guild_config_channel(guild_id, 'rules')
+
+
+async def get_guild_maintenance_channel(guild_id):
+    return await get_guild_config_channel(guild_id, 'maintenance')
+
+
+async def get_guild_config_channel(guild_id, name):
+    config = await BOT.get_guild_db_config(guild_id)
+    if config:
+        return BOT.get_channel(getattr(config, f'{name}channelid'))
+    return None
+
+
+async def guild_log(guild_id, msg = None, embed = None):
+    if not (msg or embed):
+        # can't send nothing, so return none
+        return None
+
+    channel = await get_guild_log_channel(guild_id)
+    if channel:
+        try:
+            sent = await channel.send(content=msg, embed=embed, allowed_mentions=AllowedMentions.none())
+            return sent
+        except HTTPException:
+            pass
+
+    # No channel, or send failed. Send notice in bot server:
+    sent = await Logging.bot_log(f"server {guild_id} is misconfigured for logging. Failed message:"
+                                 f"```{msg}```", embed=embed)
+    return sent
+
+
+def id_list_to_roles(guild, id_list):
     """Convert a list of integer role IDs to a list of validated roles for the requested guild.
 
     Parameters
@@ -146,13 +243,19 @@ async def do_re_search(pattern: typing.Union[re.Pattern, str], subject: str):
     return match
 
 
-def get_embed_and_log_exception(exception_type, bot, exception, event=None, message=None, ctx=None, *args, **kwargs):
-    with sentry_sdk.push_scope() as scope:
+def get_embed_and_log_exception(
+        exception_type,
+        exception,
+        message=None,
+        ctx=None,
+        *args,
+        **kwargs):
+    with (sentry_sdk.push_scope() as scope):
         embed = Embed(colour=Colour(0xff0000), timestamp=datetime.utcfromtimestamp(time.time()))
 
         # something went wrong and it might have been in on_command_error, make sure we log to the log file first
         lines = [
-            "\n===========================================EXCEPTION CAUGHT, DUMPING ALL AVAILABLE INFO===========================================",
+            "\n_____EXCEPTION CAUGHT, DUMPING ALL AVAILABLE INFO_____",
             f"Type: {exception_type}"
         ]
 
@@ -168,10 +271,10 @@ def get_embed_and_log_exception(exception_type, bot, exception, event=None, mess
         if kwarg_info == "":
             kwarg_info = "No keyword arguments"
 
-        lines.append("======================Exception======================")
+        lines.append("======================Exception=======================")
         lines.append(f"{str(exception)} ({type(exception)})")
 
-        lines.append("======================ARG INFO======================")
+        lines.append("=======================ARG INFO=======================")
         lines.append(arg_info)
         sentry_sdk.add_breadcrumb(category='arg info', message=arg_info, level='info')
 
@@ -183,14 +286,11 @@ def get_embed_and_log_exception(exception_type, bot, exception, event=None, mess
         tb = "".join(traceback.format_tb(exception.__traceback__))
         lines.append(tb)
 
-        if message is None and event is not None and hasattr(event, "message"):
-            message = event.message
-
-        if message is None and ctx is not None:
+        if message is None and ctx is not None and hasattr(ctx, "message"):
             message = ctx.message
 
         if message is not None and hasattr(message, "content"):
-            lines.append("======================ORIGINAL MESSAGE======================")
+            lines.append("===================ORIGINAL MESSAGE===================")
             lines.append(message.content)
             if message.content is None or message.content == "":
                 content = "<no content>"
@@ -199,41 +299,39 @@ def get_embed_and_log_exception(exception_type, bot, exception, event=None, mess
             scope.set_tag('message content', content)
             embed.add_field(name="Original message", value=trim_message(content, 1000), inline=False)
 
-            lines.append("======================ORIGINAL MESSAGE (DETAILED)======================")
+            lines.append("==============ORIGINAL MESSAGE (DETAILED)=============")
             lines.append(extract_info(message))
 
-        if event is not None:
-            lines.append("======================EVENT NAME======================")
-            lines.append(event)
-            scope.set_tag('event name', event)
-            embed.add_field(name="Event", value=event)
-
         if ctx is not None:
-            lines.append("======================COMMAND INFO======================")
+            lines.append("=====================COMMAND INFO=====================")
 
-            lines.append(f"Command: {ctx.command.name}")
-            embed.add_field(name="Command", value=ctx.command.name)
-            scope.set_tag('command', ctx.command.name)
+            if ctx.command is not None:
+                lines.append(f"Command: {ctx.command.name}")
+                embed.add_field(name="Command", value=ctx.command.name)
+                scope.set_tag('command', ctx.command.name)
 
-            channel_name = 'Private Message' if isinstance(ctx.channel,
-                                                           PrivateChannel) else f"{ctx.channel.name} (`{ctx.channel.id}`)"
-            lines.append(f"Channel: {channel_name}")
-            embed.add_field(name="Channel", value=channel_name, inline=False)
-            scope.set_tag('channel', channel_name)
+            if hasattr(ctx, "channel"):
+                channel_name = ('Private Message' if
+                                isinstance(ctx.channel, PrivateChannel) else
+                                f"{ctx.channel.name} (`{ctx.channel.id}`)")
+                lines.append(f"Channel: {channel_name}")
+                embed.add_field(name="Channel", value=channel_name, inline=False)
+                scope.set_tag('channel', channel_name)
 
-            sender = f"{str(ctx.author)} (`{ctx.author.id}`)"
-            scope.set_user({"id": ctx.author.id, "username": str(ctx.author)})
+            author = ctx.author if isinstance(ctx, Context) else ctx.user
+            sender = f"{str(author)} (`{author.id}`)"
+            scope.set_user({"id": author.id, "username": author.name})
 
             lines.append(f"Sender: {sender}")
             embed.add_field(name="Sender", value=sender, inline=False)
 
         lines.append(
-            "===========================================DATA DUMP COMPLETE===========================================")
+            "__________________DATA DUMP COMPLETE__________________")
         Logging.error("\n".join(lines))
 
         for t in [ConnectionClosed, ClientOSError, ServerDisconnectedError]:
             if isinstance(exception, t):
-                return
+                return None
         # nice embed for info on discord
 
         embed.set_author(name=exception_type)
@@ -246,8 +344,8 @@ def get_embed_and_log_exception(exception_type, bot, exception, event=None, mess
         return embed
 
 
-async def handle_exception(exception_type, bot, exception, event=None, message=None, ctx=None, *args, **kwargs):
-    embed = get_embed_and_log_exception(exception_type, bot, exception, event, message, ctx, *args, **kwargs)
+async def handle_exception(exception_type, exception, message=None, ctx=None, *args, **kwargs):
+    embed = get_embed_and_log_exception(exception_type, exception, message, ctx, *args, **kwargs)
     try:
         await Logging.bot_log(embed=embed)
     except Exception as ex:
@@ -260,10 +358,6 @@ def trim_message(message, limit):
     if len(message) < limit - 3:
         return message
     return f"{message[:limit - 3]}..."
-
-
-known_invalid_users = []
-user_cache = OrderedDict()
 
 
 async def get_user(uid, fetch=True):
@@ -306,7 +400,7 @@ async def username(uid, fetch=True, clean=True):
 
 def get_member_log_name(member):
     if member:
-        return f"{member.mention} {str(member)} ({member.id})"
+        return f"{member.mention} {member.display_name} ({member.id})"
     return "unknown user"
 
 
@@ -322,7 +416,7 @@ async def clean(text, guild=None, markdown=True, links=True, emoji=True):
         # resolve role mentions
         for uid in set(ROLE_ID_MATCHER.findall(text)):
             role = discord.utils.get(guild.roles, id=int(uid))
-            if role is None:
+            if role is None or not isinstance(role, discord.Role):
                 name = "@UNKNOWN ROLE"
             else:
                 name = "@" + role.name
@@ -344,7 +438,11 @@ async def clean(text, guild=None, markdown=True, links=True, emoji=True):
     if markdown:
         text = escape_markdown(text)
     else:
-        text = text.replace("@", "@\u200b").replace("**", "*​*").replace("``", "`​`")
+        text = text.replace("@", "@\u200b")
+        # noinspection InvisibleCharacter
+        text = text.replace("**", "*​*")
+        # noinspection InvisibleCharacter
+        text = text.replace("``", "`​`")
 
     if emoji:
         for e in set(EMOJI_MATCHER.findall(text)):
@@ -401,7 +499,7 @@ def save_to_buffer(buffer, data, ext="json", fields=None):
 
 
 def to_pretty_time(seconds):
-    partcount = 0
+    part_count = 0
     parts = {
         'week': 60 * 60 * 24 * 7,
         'day': 60 * 60 * 24,
@@ -415,7 +513,7 @@ def to_pretty_time(seconds):
         if seconds / v >= 1:
             amount = math.floor(seconds / v)
             seconds -= amount * v
-            if partcount == 1:
+            if part_count == 1:
                 duration += ", "
             duration += " " + f"{amount} {k}{'' if amount == 1 else 's'}"
         if seconds == 0:
@@ -479,19 +577,19 @@ def paginate(input_data, max_lines=20, max_chars=1900, prefix="", suffix=""):
             words = line.split(" ")
             for word in words:
                 if len(page) + len(word) > max_chars:
-                    # adding next word is too long for this page. 
+                    # adding next word is too long for this page.
                     # want to reduce number of mid-word splits so just save this page and start new one for next word
                     if page:
                         add_page(page)
                         count += 1
-                    # if page would be too long and if word longer than max, split on char, 
+                    # if page would be too long and if word longer than max, split on char,
                     # else we start next page: page = word
                     if len(word) > max_chars:
                         for chunk in chunk_list_or_string(word, max_chars):
                             page = f"{chunk} "
                             if len(chunk) == max_chars:
                                 add_page(page)
-                            # last chunk night not fill page, nothing to do in that case 
+                            # last chunk night not fill page, nothing to do in that case
                     else:
                         page = f"{word} "
                 else:
@@ -513,6 +611,10 @@ def pages_to_embed(content: str, embed: discord.Embed, field_name: str = "Conten
             name=f"{field_name}{', part ' + str(i) if len(contents) > 1 else ''}",
             value=f"```{chunk}```",
             inline=False)
+
+
+def get_new_uuid_str() -> str:
+    return str(uuid.uuid4())
 
 
 def closest_power2_log(num):
@@ -543,7 +645,7 @@ def is_power_of_two(num: int):
     return num and (not(num & (num - 1)))
 
 
-def get_bitshift(value: int) -> typing.Union[bool, int]:
+def get_bitshift(value: int) -> int:
     """Get the bit position for a power of two value. If a non-power-2 number is input, return value is False
 
     Parameters
@@ -553,8 +655,28 @@ def get_bitshift(value: int) -> typing.Union[bool, int]:
 
     Returns
     -------
-    int|False Bit-shift of the input value
+    int Bit-shift of the input value
     """
     if is_power_of_two(value):
-        return [int(c) for i, c in enumerate(bin(value)[:1:-1])].index(1)
+        # power of two guarantees positive and only one bit is set
+
+        # Equivalent to final implementation:
+        # bin_value = bin(value).lstrip('-0b')
+        # return len(bin_value) - 1
+
+        # Equivalent to obscure implementation:
+        # bin_value = bin(value).lstrip('-0b')
+        # bin_reversed = bin_value[::-1]
+        # bit_position = bin_reversed.index('1')
+        # return bit_position
+
+        # Obscure:
+        # return [int(c) for i, c in enumerate(bin(value)[:1:-1])].index(1)
+
+        return int.bit_length(value)-1
     raise ValueError
+
+
+def interaction_response(interaction: Interaction) -> InteractionResponse:
+    """This exists only for type hinting because pycharm can't properly infer type for interaction.response"""
+    return typing.cast(InteractionResponse, interaction.response)

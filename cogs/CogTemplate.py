@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 
 from cogs.BaseCog import BaseCog
 from utils import Logging
+from utils.Logging import TCol
 
 
 class CogName(BaseCog):
@@ -27,6 +28,12 @@ class CogName(BaseCog):
             await self.init_guild(guild)
         if not self.periodic_task.is_running():
             self.periodic_task.start()
+
+    async def shutdown(self):
+        """
+        Called before cog_unload, only when shutting down bot. Custom to this bot.
+        """
+        Logging.info(f"{self.qualified_name} shutdown", TCol.Underline, TCol.Header)
 
     async def cog_unload(self):
         self.periodic_task.cancel()
@@ -59,3 +66,6 @@ class CogName(BaseCog):
 
 async def setup(bot):
     await bot.add_cog(CogName(bot))
+
+async def teardown(bot):
+    Logging.info("Cog teardown", TCol.Underline, TCol.Header)

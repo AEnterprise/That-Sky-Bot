@@ -7,6 +7,9 @@ from discord import Embed, Reaction
 from utils import Emoji, Utils, Configuration, Lang
 from dataclasses import dataclass
 
+from utils.Constants import URL_MATCHER
+
+
 # Option = namedtuple("Option", "emoji text handler args", defaults=(None, None, None, None))
 
 
@@ -53,8 +56,6 @@ async def ask(bot, channel, author, text, options, timeout=60, show_embed=False,
         reaction, user = await bot.wait_for('reaction_add', timeout=timeout, check=check)
     except asyncio.TimeoutError as ex:
         try:
-            if delete_after:
-                await message.delete()
             await channel.send(
                 Lang.get_locale_string("questions/error_reaction_timeout", locale,
                                        error_emoji=Emoji.get_emoji("WARNING"),
@@ -65,8 +66,6 @@ async def ask(bot, channel, author, text, options, timeout=60, show_embed=False,
             pass
         raise ex
     else:
-        if delete_after:
-            await message.delete()
         h = handlers[str(reaction.emoji)]['handler']
         a = handlers[str(reaction.emoji)]['args']
         if h is None:
@@ -75,6 +74,9 @@ async def ask(bot, channel, author, text, options, timeout=60, show_embed=False,
             await h(*a) if a is not None else await h()
         else:
             h(*a) if a is not None else h()
+    finally:
+        if delete_after:
+            await message.delete()
 
 
 async def ask_text(
@@ -104,7 +106,7 @@ async def ask_text(
         txt = re.sub(r'\n\s*\n', '\n\n', txt)
         return txt
 
-    my_messages = []
+    my_messages: typing.List = []
 
     async def clean_dialog():
         nonlocal delete_after
@@ -217,7 +219,7 @@ async def ask_attachements(
             try:
                 while True:
                     message = await bot.wait_for('message', timeout=timeout, check=check)
-                    links = Utils.URL_MATCHER.findall(message.content)
+                    links = URL_MATCHER.findall(message.content)
                     attachment_links = [str(a.url) for a in message.attachments]
                     if len(links) != 0 or len(message.attachments) != 0:
                         if (len(links) + len(message.attachments)) > max_files:

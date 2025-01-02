@@ -38,7 +38,7 @@ class WordCounter(BaseCog):
     async def cog_check(self, ctx):
         if ctx.guild is None:
             return False
-        return ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx)
+        return ctx.author.guild_permissions.ban_members or await Utils.permission_manage_bot(ctx)
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):

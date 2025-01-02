@@ -1,17 +1,16 @@
 import asyncio
 import io
 from asyncio import CancelledError
+from typing import Dict
 
 import aiohttp
 import discord
 import tortoise.exceptions
-from discord import Forbidden, Embed, NotFound, HTTPException
+from discord import Forbidden, Embed, NotFound, HTTPException, Message, TextChannel
 from discord.ext import commands, tasks
 from discord.utils import utcnow
 from tortoise.exceptions import DoesNotExist
 
-import utils.Logging
-from utils.Logging import TCol
 from cogs.BaseCog import BaseCog
 from utils import Lang, Questions, Utils, Logging
 from utils.Database import DropboxChannel
@@ -21,7 +20,7 @@ class DropBox(BaseCog):
 
     def __init__(self, bot):
         super().__init__(bot)
-        self.dropboxes = dict()
+        self.dropboxes: Dict[int, Dict[int, DropboxChannel]] = dict()
         self.responses = dict()
         self.drop_messages = dict()
         self.delivery_in_progress = dict()
@@ -62,7 +61,7 @@ class DropBox(BaseCog):
 
     async def cog_check(self, ctx):
         return ctx.guild is not None \
-            and (ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx))
+            and (ctx.author.guild_permissions.ban_members or await Utils.permission_manage_bot(ctx))
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
@@ -92,7 +91,7 @@ class DropBox(BaseCog):
                         if message_id not in self.delivery_in_progress[guild_id][channel_id]:
                             self.delivery_in_progress[guild_id][channel_id].add(message_id)
                             send_tasks.append(self.bot.loop.create_task(self.drop_message_impl(message, drop_channel)))
-                except Exception as e:
+                except:
                     pass
         try:
             if send_tasks:
@@ -100,9 +99,9 @@ class DropBox(BaseCog):
         except CancelledError as e:
             raise e
         except Exception as e:
-            await Utils.handle_exception("Dropbox gather send tasks failed", self.bot, e)
+            await Utils.handle_exception("Dropbox gather send tasks failed", e)
 
-    async def drop_message_impl(self, source_message, drop_channel):
+    async def drop_message_impl(self, source_message: Message, drop_channel: TextChannel):
         """
         handles copying to dropbox, sending confirm message in channel, sending dm receipt, and deleting original
         for each message in any dropbox
@@ -111,8 +110,9 @@ class DropBox(BaseCog):
         source_channel_id = source_message.channel.id
         source_message_id = source_message.id
 
-        # get the ORM row for this dropbox.
-        drop = None
+        # TODO: add retry logic
+
+        # get the db row for this dropbox.
         if source_channel_id in self.dropboxes[guild_id]:
             drop = self.dropboxes[guild_id][source_channel_id]
         else:
@@ -137,7 +137,6 @@ class DropBox(BaseCog):
         dm_channel = source_message.author.dm_channel
 
         attachment_names = []
-        delivery_success = None
         last_drop_message = None
 
         try:
@@ -148,7 +147,7 @@ class DropBox(BaseCog):
                     await attachment.save(buffer)
                     await drop_channel.send(file=discord.File(buffer, attachment.filename))
                     attachment_names.append(attachment.filename)
-                except Exception as attach_e:
+                except Exception:
                     await drop_channel.send(
                         Lang.get_locale_string('dropbox/attachment_fail', ctx, author=source_message.author.mention))
             
@@ -177,8 +176,8 @@ class DropBox(BaseCog):
             delivery_success = False
             msg = Lang.get_locale_string('dropbox/msg_not_delivered', ctx, author=source_message.author.mention)
             await ctx.send(msg)
-            await self.bot.guild_log(guild_id, "broken dropbox...? Call alex, I guess")
-            await Utils.handle_exception("dropbox delivery failure", self.bot, e)
+            await Utils.guild_log(guild_id, "broken dropbox...? Call alex, I guess")
+            await Utils.handle_exception("dropbox delivery failure", e)
 
         try:
             # delete original message, the confirmation of sending is deleted in clean_channels loop
@@ -266,8 +265,8 @@ class DropBox(BaseCog):
                     clean_tasks = []
                     async for message in channel.history(limit=20):
                         # check if message is queued for delivery
-                        if (channel_id in self.drop_messages[guild.id]) and\
-                                (message.id in self.drop_messages[guild.id][channel_id]):
+                        if ((channel_id in self.drop_messages[guild.id]) and
+                                (message.id in self.drop_messages[guild.id][channel_id])):
                             # don't delete messages that are queued
                             continue
                         my_member = guild.get_member(message.author.id)
@@ -304,15 +303,15 @@ class DropBox(BaseCog):
                     Logging.info(f"Dropbox clean AttributeError: ")
                     pass
                 except aiohttp.ClientOSError:
-                    await self.bot.guild_log(guild.id, f"Dropbox client error. Probably safe to ignore, but check "
+                    await Utils.guild_log(guild.id, f"Dropbox client error. Probably safe to ignore, but check "
                                                        f"your dropbox channels to make sure they are clean.")
                     continue
                 except RuntimeError:
-                    await self.bot.guild_log(guild.id, f"Dropbox error for guild `{guild.name}`. What's broken?")
+                    await Utils.guild_log(guild.id, f"Dropbox error for guild `{guild.name}`. What's broken?")
                     # fall through and report
                 except Exception as e:
                     # ignore but log
-                    await Utils.handle_exception('dropbox clean failure', self.bot, e)
+                    await Utils.handle_exception('dropbox clean failure', e)
                     continue
         self.clean_in_progress = False
 
@@ -322,7 +321,7 @@ class DropBox(BaseCog):
             self.delete_in_progress[message.channel.guild.id][message.channel.id].remove(message.id)
         except (NotFound, HTTPException, Forbidden) as e:
             # ignore delete failure. we'll try again next time
-            await Utils.handle_exception('dropbox clean_message failure', self.bot, e)
+            await Utils.handle_exception('dropbox clean_message failure', e)
 
     @commands.group(name="dropbox", invoke_without_command=True)
     @commands.guild_only()
@@ -369,9 +368,9 @@ class DropBox(BaseCog):
         Parameters
         ----------
         ctx
-        sourceid
+        source_channel
             ID of the source channel
-        targetid
+        target_channel
             ID of the destination channel
 
         Returns
@@ -452,7 +451,7 @@ class DropBox(BaseCog):
             await db_row.save()
             self.dropboxes[ctx.guild.id][sourceid] = db_row
         except Exception as e:
-            await Utils.handle_exception("Failed to update dropbox channel", self.bot, e)
+            await Utils.handle_exception("Failed to update dropbox channel", e)
             await ctx.send("Can't save dropox channel.")
             return
 
@@ -490,7 +489,7 @@ class DropBox(BaseCog):
         except tortoise.exceptions.MultipleObjectsReturned:
             await ctx.send("too many dropbox channels match that id???")
         except Exception as e:
-            await Utils.handle_exception('dropbox delete failure', self.bot, e)
+            await Utils.handle_exception('dropbox delete failure', e)
             raise e
         await ctx.send(Lang.get_locale_string('dropbox/removed', ctx, source=source_description))
 

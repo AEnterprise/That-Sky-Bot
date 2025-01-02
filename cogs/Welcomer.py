@@ -46,7 +46,7 @@ class Welcomer(BaseCog):
         pass
 
     async def cog_check(self, ctx):
-        return await self.bot.permission_manage_bot(ctx) or (ctx.guild and ctx.author.guild_permissions.ban_members)
+        return await Utils.permission_manage_bot(ctx) or (ctx.guild and ctx.author.guild_permissions.ban_members)
 
     @commands.group(name="welcome", invoke_without_command=True)
     @commands.guild_only()
@@ -57,7 +57,7 @@ class Welcomer(BaseCog):
 
     @welcome.command(aliases=['verify'])
     @commands.guild_only()
-    @commands.check(sky.can_admin)
+    @commands.check(Utils.permission_manage_bot)
     async def verify_invited(self, ctx, *, member_list=""):
         async with ctx.channel.typing():
             await ctx.send("This might take a while. rate limiting stops me searching all members quickly...")
@@ -115,28 +115,28 @@ class Welcomer(BaseCog):
 
     # @welcome.group(name="members", invoke_without_command=True)
     # @commands.guild_only()
-    # @sky.can_admin()
+    # @commands.check(Utils.permission_manage_bot)
     # async def members(self, ctx):
     #     # todo: list?
     #     pass
     #
     # @members.command()
     # @commands.guild_only()
-    # @sky.can_admin()
+    # @commands.check(Utils.permission_manage_bot)
     # async def remove(self, ctx, *, member_list):
     #     # todo: add individual by br-separated list, one, or by csv
     #     pass
     #
     # @members.command()
     # @commands.guild_only()
-    # @sky.can_admin()
+    # @commands.check(Utils.permission_manage_bot)
     # async def verify(self, ctx, *, member_list):
     #     # todo: add individual by br-separated list, one, or by csv
     #     pass
     #
     # @members.command()
     # @commands.guild_only()
-    # @sky.can_admin()
+    # @commands.check(Utils.permission_manage_bot)
     # async def verify_all(self, ctx):
     #     # todo: check all members whether they are on the list
     #     pass
@@ -261,7 +261,7 @@ class Welcomer(BaseCog):
                 if not has_no_roles and not member_after:
                     await after.add_roles(member_role)
         except Exception as e:
-            await Utils.handle_exception("problem enforcing member role", self.bot, e)
+            await Utils.handle_exception("problem enforcing member role", e)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
@@ -282,7 +282,7 @@ class Welcomer(BaseCog):
             return
 
         guild_row = await self.bot.get_guild_db_config(message.guild.id)
-        log_channel = await self.bot.get_guild_log_channel(message.guild.id)
+        log_channel = await Utils.get_guild_log_channel(message.guild.id)
         member_role = message.guild.get_role(guild_row.memberrole)
         nonmember_role = message.guild.get_role(guild_row.nonmemberrole)
 
@@ -321,7 +321,7 @@ class Welcomer(BaseCog):
                     Logging.info(f"member join exception user id: {message.author.id}")
                 except Exception as ee:
                     pass
-                await Utils.handle_exception("member join exception", self.bot, e)
+                await Utils.handle_exception("member join exception", e)
 
 
 async def setup(bot):

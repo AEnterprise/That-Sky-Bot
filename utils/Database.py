@@ -252,6 +252,8 @@ class CustomCommand(AbstractBaseModel, DeprecatedServerIdMixIn):
     response = CharField(max_length=2000)
     deletetrigger = BooleanField(default=False)
     reply = BooleanField(default=False)
+    autocomplete = BooleanField(default=False)
+    elevated = SmallIntField(default=0)
 
     def __str__(self):
         return self.trigger
@@ -292,10 +294,13 @@ class Guild(AbstractBaseModel):
     admin_roles: ReverseRelation["AdminRole"]
     autoresponders: ReverseRelation["AutoResponder"]
     bug_channels: ReverseRelation["BugReportingChannel"]
+    command_permissions: ReverseRelation["UserPermission"]
+    krill_config: ReverseRelation["KrillConfig"]
     locales: ReverseRelation["Localization"]
+    mischief_names: ReverseRelation["MischiefName"]
+    mischief_roles: ReverseRelation["MischiefRole"]
     mod_roles: ReverseRelation["ModRole"]
     trusted_roles: ReverseRelation["TrustedRole"]
-    command_permissions: ReverseRelation["UserPermission"]
 
     def __str__(self):
         return self.serverid
@@ -372,6 +377,18 @@ class MischiefRole(AbstractBaseModel):
     class Meta:
         unique_together = ('roleid', 'guild')
         table = 'mischiefrole'
+
+
+class MischiefName(AbstractBaseModel):
+    guild = ForeignKeyField(f'{app}.Guild', related_name='mischief_names', index=True)
+    name = CharField(max_length=36)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        unique_together = ('name', 'guild')
+        table = 'mischiefname'
 
 
 class ModRole(AbstractBaseModel):

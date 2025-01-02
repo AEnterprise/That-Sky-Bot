@@ -1,24 +1,34 @@
 import time
 import typing
-from typing import Optional, Literal
+from datetime import datetime
+from enum import Enum
+from typing import Optional
 
 import discord
-from discord import app_commands, InteractionResponse, Interaction, Permissions
-from discord.app_commands import Group
-from discord.ext.commands import Context, hybrid_command, Greedy, is_owner, guild_only, command
-from datetime import datetime
+from discord import app_commands, InteractionResponse, Interaction
+from discord.ext.commands import Context, Greedy, is_owner, guild_only, command
 
 from cogs.BaseCog import BaseCog
-from utils import Utils
+from utils import Utils, Logging
+from utils.Logging import TCol
+from utils.Utils import interaction_response
 
+
+class SyncValues(Enum):
+    Current ="~"
+    GlobalToLocal = "*"
+    ClearTree = "^"
 
 class Basic(BaseCog):
-    Sync_Current = "Current"
-    Sync_GlobalToLocal = "Global to Local"
-    Sync_ClearTree = "Clear Commands"
 
     async def cog_check(self, ctx):
         return await Utils.permission_official_mute(ctx)
+
+    async def cog_unload(self):
+        Logging.info("unload Basic", TCol.Cyan)
+
+    async def cog_load(self):
+        Logging.info("load Basic", TCol.Cyan)
 
     @command(aliases=["ping"], hidden=True)
     async def ping_pong(self, ctx: Context):
@@ -31,17 +41,22 @@ class Basic(BaseCog):
         edited_message = await message.edit(
             content=f":hourglass: REST API ping is {rest} ms | Websocket ping is {latency} ms :hourglass:")
 
-    @command()
-    async def now(self, ctx, request_formats: str = "f"):
+    @app_commands.command(description="Get discord time stamps")
+    @app_commands.describe(request_formats="Available formats: d D t T f F R s")
+    @guild_only()
+    async def timestamp(
+            self,
+            interaction: Interaction,
+            request_formats: str = ""):
         """Print timestamp for current time. TODO: print timestamp for a given datetime or offset
 
         Parameters
         ----------
-        ctx
+        interaction
         request_formats
-            The formats you want to see. Available formats: `dDtTfFRs`
+            Available formats: d D t T f F R s
         """
-        if ctx.author.bot or not await Utils.can_mod_official(ctx):
+        if interaction.user.bot:
             return
 
         now = int(datetime.now().timestamp())
@@ -72,17 +87,53 @@ class Basic(BaseCog):
         else:
             output = "No valid format requested"
 
-        await ctx.send(output)
+        await interaction_response(interaction).send_message(output, ephemeral=True)
 
-    @guild_only()
+    @app_commands.guild_only()
+    @app_commands.command()
+    @app_commands.default_permissions(manage_channels=True)
+    async def sync_app_commands(
+            self,
+            interaction: Interaction,
+            operation: Optional[SyncValues],
+            guild: str = None) -> None:
+        ctx = await Context.from_interaction(interaction)
+
+        if not await self.bot.is_owner(interaction.user):
+            # Permissions prevent most from seeing the command, but owner is required
+            await interaction_response(interaction).send_message(f"you're not <@{self.bot.owner_id}>,  you can't do that!")
+            return
+
+        guilds = []
+        if ctx.valid:
+            if guild:
+                for candidate_guild in self.bot.guilds:
+                    if candidate_guild.name == guild:
+                        guilds.append(candidate_guild.id)
+            await self.do_sync(ctx, guilds=guilds, spec=operation.value if operation else "")
+        else:
+            await interaction_response(interaction).send_message("can't sync from here")
+
+    @sync_app_commands.autocomplete('guild')
+    async def guild_autocomplete(
+            self,
+            interaction: discord.Interaction,
+            current: str) -> typing.List[app_commands.Choice[str]]:
+        guilds = [guild for guild in self.bot.guilds]
+        ret = [
+            app_commands.Choice(name=guild.name, value=guild.name)
+            for guild in guilds if current.lower() in guild.name.lower()
+        ]
+        return ret
+
     @is_owner()
-    @hybrid_command(aliases=["sync"])
+    @guild_only()
+    @command(aliases=["sync"])
     async def app_command_sync(
             self,
             ctx: Context,
             guilds: Greedy[discord.Object] = None,
-            spec: Optional[
-                Literal[Sync_Current, Sync_GlobalToLocal, Sync_ClearTree]] = None) -> None:
+            spec: Optional[SyncValues] = None) -> None:
         """
         Sync commands by guild or globally
 
@@ -90,21 +141,31 @@ class Basic(BaseCog):
         -----------
         ctx
         guilds: list
-            List of guilds to sync. Omit for global sync
+            Guilds to sync. Omit for global sync
         spec: str
-            Override sync type. `Current`, `Global to Local`, or `Clear Commands`"""
+            Sync type: [~]current [*]global to local [^]clear tree"""
+        validated_guilds = []
+        # Logging.info("guilds: "+repr(guilds))
+        if guilds:
+            for i in guilds:
+                validated_guilds.append(i.id)
+        # Logging.info("my_guilds: "+repr(validated_guilds))
+        # Logging.info("spec: "+repr(spec))
+        await self.do_sync(ctx, validated_guilds, spec.value if spec else '')
+
+    async def do_sync(self, ctx, guilds: typing.List[int] = None, spec: str = "") -> None:
         if not guilds:
-            if spec == self.Sync_Current:
-                synced = await ctx.bot.tree.sync(guild=ctx.guild)
-            elif spec == self.Sync_GlobalToLocal:
-                ctx.bot.tree.copy_global_to(guild=ctx.guild)
-                synced = await ctx.bot.tree.sync(guild=ctx.guild)
-            elif spec == self.Sync_ClearTree:
-                ctx.bot.tree.clear_commands(guild=ctx.guild)
-                await ctx.bot.tree.sync(guild=ctx.guild)
+            if spec == SyncValues.Current.value:
+                synced = await self.bot.tree.sync(guild=ctx.guild)
+            elif spec == SyncValues.GlobalToLocal.value:
+                self.bot.tree.copy_global_to(guild=ctx.guild)
+                synced = await self.bot.tree.sync(guild=ctx.guild)
+            elif spec == SyncValues.ClearTree.value:
+                self.bot.tree.clear_commands(guild=ctx.guild)
+                await self.bot.tree.sync(guild=ctx.guild)
                 synced = []
             else:
-                synced = await ctx.bot.tree.sync()
+                synced = await self.bot.tree.sync()
 
             await ctx.send(
                 f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
@@ -112,9 +173,13 @@ class Basic(BaseCog):
             return
 
         ret = 0
-        for guild in guilds:
+        Logging.info("do guilds: " + repr(guilds))
+        for guild_id in guilds:
             try:
-                await ctx.bot.tree.sync(guild=guild)
+                a_guild = self.bot.get_guild(guild_id)
+                if a_guild is None or a_guild not in self.bot.guilds:
+                    continue
+                await self.bot.tree.sync(guild=a_guild)
             except discord.HTTPException:
                 pass
             else:
@@ -134,20 +199,17 @@ class Basic(BaseCog):
     # @fun_group.command(description="Bops a member")
     # @app_commands.describe(member="The member to bop")
     # async def bop(self, interaction: Interaction, member: discord.Member):
-    #     r = typing.cast(InteractionResponse, interaction.response)
-    #     await r.send_message(f"bop {member.mention}")
+    #     await interaction_response(interaction).send_message(f"bop {member.mention}")
     #
     # @fun_group.command(description="Unbops a member")
     # @app_commands.describe(member="The member to unbop")
     # async def unbop(self, interaction: Interaction, member: discord.Member):
-    #     r = typing.cast(InteractionResponse, interaction.response)
-    #     await r.send_message(f"unbop {member.mention}")
+    #     await interaction_response(interaction).send_message(f"unbop {member.mention}")
     #
     # @subgroup.command(description="Slaps a member")
     # @app_commands.describe(member="the member to slap")
     # async def botslap(self, interaction: Interaction, member: discord.Member):
-    #     r = typing.cast(InteractionResponse, interaction.response)
-    #     await r.send_message(f"botslap {member.mention}")
+    #     await interaction_response(interaction).send_message(f"botslap {member.mention}")
     ####
 
 

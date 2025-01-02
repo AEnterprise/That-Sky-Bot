@@ -71,7 +71,7 @@ class PermissionConfig(BaseCog):
                 else:
                     await row.delete()
         except KeyError:
-            Logging.info(f"{TCol.cFail}Role loading failed in {guild.id}{TCol.cEnd}")
+            Logging.info(f"Role loading failed in {guild.id}", TCol.Fail)
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
@@ -94,19 +94,19 @@ class PermissionConfig(BaseCog):
     async def cog_check(self, ctx):
         # Minimum permission for all permissions commands: manage_server
         if ctx.guild:
-            if ctx.author.guild_permissions.manage_guild or await self.bot.permission_manage_bot(ctx):
+            if ctx.author.guild_permissions.manage_guild or await Utils.permission_manage_bot(ctx):
                 return True
             for role in ctx.author.roles:
                 if role.id in self.admin_roles[ctx.guild.id]:
                     return True
-        if await self.bot.permission_manage_bot(ctx):
+        if await Utils.permission_manage_bot(ctx):
             return True
         return False
 
     @commands.group(name="permission_config", aliases=["permission", "permissions"], invoke_without_command=True)
     @commands.guild_only()
     async def permission_config(self, ctx):
-        is_bot_admin = await self.bot.permission_manage_bot(ctx)
+        is_bot_admin = await Utils.permission_manage_bot(ctx)
 
         embed = discord.Embed(
             timestamp=ctx.message.created_at,

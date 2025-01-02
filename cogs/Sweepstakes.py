@@ -22,7 +22,7 @@ class Sweepstakes(BaseCog):
             return False
         # TODO: change to admin role
         #  and/or separate roles for view and manage sweeps
-        return ctx.author.guild_permissions.manage_channels or await self.bot.permission_manage_bot(ctx)
+        return ctx.author.guild_permissions.manage_channels or await Utils.permission_manage_bot(ctx)
 
     async def get_reaction_message(self, ctx, jump_url):
         parts = jump_url.split('/')
@@ -38,7 +38,7 @@ class Sweepstakes(BaseCog):
             message = await channel.fetch_message(message_id)
             return message
         except Exception as e:
-            await Utils.handle_exception(f"Failed to get message {channel_id}/{message_id}", self.bot, e)
+            await Utils.handle_exception(f"Failed to get message {channel_id}/{message_id}", e)
             await ctx.send(Lang.get_locale_string('sweeps/fetch_message_failed', ctx, channel_id=channel_id, message_id=message_id))
 
     async def get_unique_react_users(self, message: Message):
@@ -83,7 +83,7 @@ class Sweepstakes(BaseCog):
                 key = reaction.emoji.name if hasattr(reaction.emoji, "name") else reaction.emoji
                 reaction_list[key] = users
         except Exception as e:
-            await Utils.handle_exception("sweeps failed fetching all react users", self.bot, e)
+            await Utils.handle_exception("sweeps failed fetching all react users", e)
             raise
 
         try:
@@ -103,7 +103,7 @@ class Sweepstakes(BaseCog):
                                    "mention": user.mention,
                                    "left_guild": left_guild},)
         except Exception as e:
-            await Utils.handle_exception("sweeps failed logging all react users", self.bot, e)
+            await Utils.handle_exception("sweeps failed logging all react users", e)
             raise
         return {'fields': fields, 'data': data_list}
 
@@ -115,7 +115,7 @@ class Sweepstakes(BaseCog):
             await ctx.send(Lang.get_locale_string('sweeps/unique_result', ctx, count=len(unique_users['data'])))
             await self.send_csv(ctx, unique_users['fields'], unique_users['data'])
         except Exception as e:
-            await Utils.handle_exception(f"Failed to get entries {channel_id}/{message_id}", self.bot, e)
+            await Utils.handle_exception(f"Failed to get entries {channel_id}/{message_id}", e)
             await ctx.send(f"Failed to get entries {channel_id}/{message_id}")
             raise
 
@@ -127,7 +127,7 @@ class Sweepstakes(BaseCog):
             await ctx.send(Lang.get_locale_string('sweeps/total_entries', ctx, count=len(reactions['data'])))
             await self.send_csv(ctx, reactions['fields'], reactions['data'])
         except Exception as e:
-            await Utils.handle_exception(f"Failed to get entries {channel_id}/{message_id}", self.bot, e)
+            await Utils.handle_exception(f"Failed to get entries {channel_id}/{message_id}", e)
             await ctx.send(Lang.get_locale_string('sweeps/fetch_entries_failed', ctx, channel_id=channel_id, message_id=message_id))
             raise
 
@@ -182,7 +182,7 @@ class Sweepstakes(BaseCog):
         except Exception as e:
             msg = f"Failed to complete sweeps for {message.channel.id}/{message.id}"
             await ctx.send(msg)
-            await Utils.handle_exception(msg, self.bot, e)
+            await Utils.handle_exception(msg, e)
             raise e
         await ctx.send(Lang.get_locale_string('sweeps/drawing_closed', ctx))
 

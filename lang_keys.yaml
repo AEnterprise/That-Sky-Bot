@@ -259,6 +259,7 @@ custom_commands:
   command_updated:
   deletetrigger_trigger_updated:
   reply_trigger_updated:
+  autocomplete_trigger_updated:
 word_counter:
   list_words:
   no_words:

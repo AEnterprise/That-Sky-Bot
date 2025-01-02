@@ -223,7 +223,7 @@ bugs:
 eden:
   reset: |
     The Eye of Eden resets once per week.
-    Next reset happens {reset} (In {countdown})
+    Next reset happens {reset} ({countdown})
   tz_help: I couldn't find a timezone called '{tz}.' Maybe you can find your timezone in this list <https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568>
   tz_mention: I'm not falling for that again
   cool_it: Cool it, {author}. Try again in {remain}
@@ -263,10 +263,10 @@ lang:
   unknown_locale: |
     `{locale}` is not a locale I know. Try one from this list: `{locale_lsit}`
   reloaded: Language files reloaded for `{server_name}` server
-  channel_not_unset: I can't unset channel locale, because channel locale is not set for <#{channelid}>
-  channel_unset: Channel locale `{old_value}` been **unset**. Server locale will be used.
-  channel_already_set: Locale is already `{locale}` in <#{channelid}>
-  channel_set: Channel <#{channelid}> now has `{locale}` as its default language.
+  channel_not_unset: I can't unset channel locale, because channel locale is not set for {channel_mention}
+  channel_unset: Channel {channel_mention} locale been **unset**. Server locale will be used.
+  channel_already_set: Locale is already `{locale}` in {channel_mention}
+  channel_set: Channel {channel_mention} now has `{locale}` as its default language.
   test: key `{lang_key}` in locale `{locale}` says ```{result}```
   test_failed: I tried to find `{lang_key}` in the `{locale}` locale, but couldn't
 dropbox:
@@ -422,12 +422,14 @@ custom_commands:
   override_confirmation: This command already exists, do you want to replace it with this new text?
   command_removed: Command `{trigger}` has been removed.
   not_found: Unable to remove `{trigger}` as it doesn't seem to exist.
-  creating_command: This command does not exist, making it for you instead.
+  creating_command: The command `{trigger}` did not exist so I made it for you instead.
   command_updated: Command `{trigger}` has been updated!
   deletetrigger_trigger_updated: |
     Command `{trigger}` delete triggering command: `{value}`
   reply_trigger_updated: |
     Command `{trigger}` reply to command author: `{value}`
+  autocomplete_trigger_updated: |
+    Command `{trigger}` in autocomplete list: `{value}`
 word_counter:
   list_words: Words being counted for metrics in the {server_name} server
   no_words: There are no words currently being counted.

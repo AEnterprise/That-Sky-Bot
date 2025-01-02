@@ -4,10 +4,18 @@ import discord
 from discord.ext import commands
 
 from cogs.BaseCog import BaseCog
-from utils import Configuration, Logging, Emoji, Lang
-from utils.Database import ConfigChannel
-from utils.Utils import validate_channel_name
+from utils import Logging, Emoji, Lang
 from utils import Utils
+from utils.Database import ConfigChannel
+from utils.Utils import BaseEnum
+
+
+class ChannelName(BaseEnum):
+    welcome_channel = "welcome_channel"
+    rules_channel = "rules_channel"
+    log_channel = "log_channel"
+    ro_art_channel = "ro_art_channel"
+    entry_channel = "entry_channel"
 
 
 class ChannelConfig(BaseCog):
@@ -38,7 +46,7 @@ class ChannelConfig(BaseCog):
     async def load_guild(self, guild):
         my_channels = dict()
         for row in await ConfigChannel.filter(serverid=guild.id):
-            if validate_channel_name(row.configname):
+            if row.configname in ChannelName:
                 my_channels[row.configname] = row.channelid
             else:
                 Logging.error(f"Misconfiguration in config channel: {row.configname}")
@@ -55,9 +63,9 @@ class ChannelConfig(BaseCog):
 
     async def cog_check(self, ctx):
         return (ctx.guild is not None
-                and (ctx.author.guild_permissions.ban_members or await self.bot.permission_manage_bot(ctx)))
+                and (ctx.author.guild_permissions.ban_members or await Utils.permission_manage_bot(ctx)))
 
-    @commands.group(name="channel_config", aliases=["chanconf", "channelconfig"], invoke_without_command=True)
+    @commands.group(name="channel_config", aliases=["channels", "channelconfig"], invoke_without_command=True)
     @commands.guild_only()
     async def channel_config(self, ctx):
         """
@@ -68,8 +76,7 @@ class ChannelConfig(BaseCog):
             color=0x663399,
             title=Lang.get_locale_string("channel_config/info", ctx, server_name=ctx.guild.name))
         embed.add_field(name='Configurable Channels',
-                        value=f"[{Utils.welcome_channel}|{Utils.rules_channel}|"
-                              f"{Utils.log_channel}|{Utils.ro_art_channel}|{Utils.entry_channel}]",
+                        value=f"[{'|'.join([i.value for i in ChannelName])}]",
                         inline=False)
 
         for row in await ConfigChannel.filter(serverid=ctx.guild.id):
@@ -89,16 +96,17 @@ class ChannelConfig(BaseCog):
     @channel_config.command()
     @commands.guild_only()
     async def set(self, ctx, channel_name: str = "", channel_id: int = 0):
-        if not validate_channel_name(channel_name):
-            await ctx.send(f"""
-`channel set` requires both config channel name and channel_id.
-`[{Utils.ro_art_channel}|{Utils.welcome_channel}|{Utils.rules_channel}|{Utils.log_channel}|{Utils.entry_channel}]`
-""")
+        if channel_name not in ChannelName:
+            await ctx.send(f"`channel set` requires both config channel name and channel_id.\n"
+                           f"`[{'|'.join([i.value for i in ChannelName])}]`")
             return
         channel_added = await self.set_channel(ctx, channel_name, channel_id)
         if channel_added:
             message = Lang.get_locale_string(
-                'channel_config/channel_set', ctx, channel_name=channel_name, channel_id=channel_id)
+                'channel_config/channel_set',
+                ctx,
+                channel_name=channel_name,
+                channel_id=channel_id)
             await ctx.send(f"{Emoji.get_chat_emoji('YES')} {message}")
         else:
             await ctx.send(f"{Emoji.get_chat_emoji('BUG')} Failed")
@@ -112,7 +120,7 @@ class ChannelConfig(BaseCog):
             row, created = await ConfigChannel.get_or_create(serverid=ctx.guild.id, configname=channel_name)
             row.channelid = channel_id
         except Exception as e:
-            await Utils.handle_exception("set config channel failed", self.bot, e)
+            await Utils.handle_exception("set config channel failed", e)
             return False
         await row.save()
         self.bot.config_channels[ctx.guild.id][channel_name] = channel_id

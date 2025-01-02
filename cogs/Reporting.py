@@ -80,7 +80,7 @@ class Reporting(BaseCog):
                 f"platform: {pl}\n"
             )
         except Exception as e:
-            await Utils.handle_exception("failed to send reporting CSV startup message", self.bot, e)
+            await Utils.handle_exception("failed to send reporting CSV startup message", e)
             return
 
         end_id = sys.maxsize if end is None else end
